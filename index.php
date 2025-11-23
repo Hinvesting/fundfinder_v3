@@ -80,31 +80,64 @@ function searchFunding($type, $location, $purpose) {
     curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
     
     $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     
     if (curl_errno($ch)) {
-        return ['error' => 'Curl error: ' . curl_error($ch)];
+        $error = curl_error($ch);
+        curl_close($ch);
+        return ['error' => 'Curl error: ' . $error];
     }
     curl_close($ch);
     
+    // Check for HTTP errors
+    if ($httpCode !== 200) {
+        return ['error' => 'API Error: HTTP ' . $httpCode, 'response' => $response];
+    }
+    
     $jsonResponse = json_decode($response, true);
+    
+    // Check if response was valid JSON
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        return ['error' => 'Invalid JSON response from API', 'raw' => $response];
+    }
+
+    // Check for API errors in response
+    if (isset($jsonResponse['error'])) {
+        return ['error' => 'API Error: ' . ($jsonResponse['error']['message'] ?? 'Unknown error')];
+    }
 
     // Extract text from Gemini response structure
-    if (isset($jsonResponse['candidates'][0]['content']['parts'][0]['text'])) {
-        $rawText = $jsonResponse['candidates'][0]['content']['parts'][0]['text'];
+    // Path: candidates[0].content.parts[0].text
+    if (isset($jsonResponse['candidates']) && 
+        is_array($jsonResponse['candidates']) && 
+        count($jsonResponse['candidates']) > 0) {
         
-        // Sanitize and Parse
-        $cleanText = cleanAIJson($rawText);
-        $parsedData = json_decode($cleanText, true);
+        $candidate = $jsonResponse['candidates'][0];
+        
+        if (isset($candidate['content']['parts']) && 
+            is_array($candidate['content']['parts']) && 
+            count($candidate['content']['parts']) > 0) {
+            
+            $rawText = $candidate['content']['parts'][0]['text'] ?? '';
+            
+            if (empty($rawText)) {
+                return ['error' => 'Empty response from API'];
+            }
+            
+            // Sanitize and Parse
+            $cleanText = cleanAIJson($rawText);
+            $parsedData = json_decode($cleanText, true);
 
-        if (json_last_error() === JSON_ERROR_NONE) {
-            return $parsedData;
-        } else {
-            // Fallback if JSON fails (Log this in production)
-            return ['error' => 'AI output was not valid JSON', 'raw' => $rawText];
+            if (json_last_error() === JSON_ERROR_NONE && is_array($parsedData)) {
+                return $parsedData;
+            } else {
+                // Fallback if JSON fails
+                return ['error' => 'AI output was not valid JSON', 'raw' => $rawText, 'clean' => $cleanText];
+            }
         }
     }
 
-    return ['error' => 'Invalid API Response structure'];
+    return ['error' => 'Invalid API Response structure', 'debug' => $jsonResponse];
 }
 
 // 4. ROUTING
