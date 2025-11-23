@@ -22,7 +22,7 @@ function cleanAIJson($text) {
 
 // 3. CORE LOGIC: AI Search
 function searchFunding($type, $location, $purpose) {
-    $apiKey = $_ENV['GEMINI_API_KEY'] ?? '';
+    $apiKey = trim($_ENV['GEMINI_API_KEY'] ?? '');
     
     if (empty($apiKey)) {
         return ['error' => 'Server Config Error: API Key missing'];
@@ -50,7 +50,7 @@ function searchFunding($type, $location, $purpose) {
             "type": "Grant" or "Loan" or "Investor",
             "amount": "e.g. $5,000 - $20,000",
             "deadline": "e.g. Dec 31, 2024 or Rolling",
-            "link": "[https://example.com](https://example.com)",
+            "link": "https://example.com",
             "match_reason": "1 short sentence on why this fits."
         }
     ]
@@ -71,11 +71,13 @@ function searchFunding($type, $location, $purpose) {
         ]
     ];
 
-    $ch = curl_init("[https://generativelanguage.googleapis.com/v1beta/models/models/gemini-flash-lite-latest:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=)" . $apiKey);
+    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . urlencode($apiKey);
+    $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
     
     $response = curl_exec($ch);
     
