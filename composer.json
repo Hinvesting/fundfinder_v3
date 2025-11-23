@@ -1,0 +1,17 @@
+{
+    "name": "hinvesting/fundfinder_v3",
+    "description": "AI Funding Search App",
+    "type": "project",
+    "require": {
+        "php": "^7.4 || ^8.0",
+        "vlucas/phpdotenv": "^5.5",
+        "stripe/stripe-php": "^10.0",
+        "google/apiclient": "^2.15"
+    },
+    "autoload": {
+        "psr-4": {
+            "FundFinder\\": "src/"
+        }
+    },
+    "minimum-stability": "stable"
+}
