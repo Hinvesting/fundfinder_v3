@@ -20,17 +20,17 @@ function cleanAIJson($text) {
     return trim($text);
 }
 
-// 3. CORE LOGIC: AI Search
+// 3. CORE LOGIC: AI Search (UPDATED: GEO-ENFORCER)
 function searchFunding($type, $location, $purpose) {
+    // FIX 1: The "Broom" - Trim hidden spaces/newlines from the key
     $apiKey = trim($_ENV['GEMINI_API_KEY'] ?? '');
     
     if (empty($apiKey)) {
-        return ['error' => 'Server Config Error: API Key missing'];
+        return ['error' => 'Server Config Error: API Key missing.'];
     }
 
-    // The Prompt Engineering
-    // We use a "System" persona to enforce strict JSON compliance.
-    $systemInstruction = "You are a strict backend API for a funding database. You never speak. You only output raw JSON arrays.";
+    // NEW: Strict Geographic & Readiness Instructions
+    $systemInstruction = "You are a senior funding consultant. Your specialized skill is 'Geographic Precision'.";
     
     $userPrompt = <<<EOT
     CONTEXT:
@@ -38,20 +38,31 @@ function searchFunding($type, $location, $purpose) {
     Location: $location
     Need: $purpose
 
+    CRITICAL RULES FOR SELECTION:
+    1. GEOGRAPHIC PRIORITY: You must prioritize funding sources specifically for $location. 
+       - If $location is a city, look for City-level grants first, then County, then State.
+       - Do NOT recommend generic national loans (like generic SBA loans) unless they have a specific initiative for this industry.
+    
+    2. REALITY CHECK: 
+       - If the business sounds like a small local business (restaurant, retail, service), DO NOT recommend "Venture Capital" or "Angel Investors" unless they are explicitly local community investors. Focus on Grants, CDFIs, and Microloans.
+       - If it is a Tech Startup, prioritize Accelerators and Pre-seed funds that accept founders from $location.
+
+    3. ADMIN & MATCH REASONING:
+       - For 'match_reason', explicitly state WHY the location matches (e.g., "Available specifically for businesses in King County").
+
     TASK:
-    Identify 3 real or highly realistic funding sources (Grants, Loans, or Angel Networks) that match this specific user.
+    Identify 3 highly relevant funding sources.
 
     OUTPUT FORMAT:
-    Return ONLY a valid JSON Array. No markdown. No conversational filler.
-    Follow this exact schema:
+    Return ONLY a valid JSON Array. Schema:
     [
         {
-            "name": "Name of Grant/Loan",
-            "type": "Grant" or "Loan" or "Investor",
-            "amount": "e.g. $5,000 - $20,000",
-            "deadline": "e.g. Dec 31, 2024 or Rolling",
-            "link": "https://example.com",
-            "match_reason": "1 short sentence on why this fits."
+            "name": "Name of Funding",
+            "type": "Grant/Loan/Investor",
+            "amount": "$ Amount",
+            "deadline": "Date or 'Rolling'",
+            "link": "Application URL",
+            "match_reason": "Specific reason this fits the location and type."
         }
     ]
     EOT;
@@ -65,75 +76,42 @@ function searchFunding($type, $location, $purpose) {
             ]
         ],
         "generationConfig" => [
-            "temperature" => 0.2, // Low temp = more deterministic/strict
+            "temperature" => 0.2, // Low temperature for strict adherence
             "maxOutputTokens" => 1000,
-            "responseMimeType" => "application/json" // Force JSON mode if supported by model version
+            "responseMimeType" => "application/json" 
         ]
     ];
 
-    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=" . urlencode($apiKey);
+    // FIX 2: Updated Model URL to Flash Lite Latest
+    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-preview-02-05:generateContent?key=" . urlencode($apiKey);
+
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    
+    // FIX 3: Force IPv4
     curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
     
     $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     
     if (curl_errno($ch)) {
-        $error = curl_error($ch);
-        curl_close($ch);
-        return ['error' => 'Curl error: ' . $error];
+        return ['error' => 'Curl error: ' . curl_error($ch)];
     }
     curl_close($ch);
     
-    // Check for HTTP errors
-    if ($httpCode !== 200) {
-        return ['error' => 'API Error: HTTP ' . $httpCode, 'response' => $response];
-    }
-    
     $jsonResponse = json_decode($response, true);
-    
-    // Check if response was valid JSON
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        return ['error' => 'Invalid JSON response from API', 'raw' => $response];
-    }
 
-    // Check for API errors in response
-    if (isset($jsonResponse['error'])) {
-        return ['error' => 'API Error: ' . ($jsonResponse['error']['message'] ?? 'Unknown error')];
-    }
+    if (isset($jsonResponse['candidates'][0]['content']['parts'][0]['text'])) {
+        $rawText = $jsonResponse['candidates'][0]['content']['parts'][0]['text'];
+        $cleanText = cleanAIJson($rawText);
+        $parsedData = json_decode($cleanText, true);
 
-    // Extract text from Gemini response structure
-    // Path: candidates[0].content.parts[0].text
-    if (isset($jsonResponse['candidates']) && 
-        is_array($jsonResponse['candidates']) && 
-        count($jsonResponse['candidates']) > 0) {
-        
-        $candidate = $jsonResponse['candidates'][0];
-        
-        if (isset($candidate['content']['parts']) && 
-            is_array($candidate['content']['parts']) && 
-            count($candidate['content']['parts']) > 0) {
-            
-            $rawText = $candidate['content']['parts'][0]['text'] ?? '';
-            
-            if (empty($rawText)) {
-                return ['error' => 'Empty response from API'];
-            }
-            
-            // Sanitize and Parse
-            $cleanText = cleanAIJson($rawText);
-            $parsedData = json_decode($cleanText, true);
-
-            if (json_last_error() === JSON_ERROR_NONE && is_array($parsedData)) {
-                return $parsedData;
-            } else {
-                // Fallback if JSON fails
-                return ['error' => 'AI output was not valid JSON', 'raw' => $rawText, 'clean' => $cleanText];
-            }
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $parsedData;
+        } else {
+            return ['error' => 'AI output was not valid JSON', 'raw' => $rawText];
         }
     }
 
