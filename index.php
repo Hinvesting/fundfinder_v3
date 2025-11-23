@@ -31,12 +31,13 @@ function initDatabase() {
     $db = getDB();
     if (!$db) return false;
     
-    // Create users table
+    // Create users table with subscription_status
     $db->exec("CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
+        subscription_status TEXT DEFAULT 'free',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
     
@@ -59,6 +60,9 @@ function initDatabase() {
 
 // Initialize database on load
 initDatabase();
+
+// 1C. STRIPE INITIALIZATION
+\Stripe\Stripe::setApiKey($_ENV['STRIPE_SECRET_KEY'] ?? '');
 
 // 2. HELPER: Clean AI Output
 // LLMs often wrap JSON in markdown like ```json ... ```. This strips that out.
@@ -302,16 +306,136 @@ if ($uri === '/api/me' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     header('Content-Type: application/json');
     
     if (isAuthenticated()) {
+        // Fetch subscription status from database
+        $db = getDB();
+        $subscriptionStatus = 'free';
+        
+        if ($db) {
+            $stmt = $db->prepare("SELECT subscription_status FROM users WHERE id = ?");
+            $stmt->execute([$_SESSION['user_id']]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($user) {
+                $subscriptionStatus = $user['subscription_status'];
+            }
+        }
+        
         echo json_encode([
             'authenticated' => true,
             'user' => [
                 'id' => $_SESSION['user_id'],
                 'name' => $_SESSION['user_name'],
-                'email' => $_SESSION['user_email']
+                'email' => $_SESSION['user_email'],
+                'subscription_status' => $subscriptionStatus
             ]
         ]);
     } else {
         echo json_encode(['authenticated' => false]);
+    }
+    exit;
+}
+
+// 4A-2. STRIPE PAYMENT ROUTES
+
+// Create Stripe Checkout Session
+if ($uri === '/api/checkout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    requireAuth(); // User must be logged in
+    
+    $stripeSecretKey = $_ENV['STRIPE_SECRET_KEY'] ?? '';
+    if (empty($stripeSecretKey)) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Stripe not configured']);
+        exit;
+    }
+    
+    try {
+        // Create Stripe Checkout Session
+        $session = \Stripe\Checkout\Session::create([
+            'payment_method_types' => ['card'],
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => 'usd',
+                    'product_data' => [
+                        'name' => 'FundFinder Pro',
+                        'description' => 'Unlimited funding searches and saved items',
+                    ],
+                    'unit_amount' => 2900, // $29.00
+                ],
+                'quantity' => 1,
+            ]],
+            'mode' => 'payment',
+            'success_url' => ($_ENV['APP_URL'] ?? 'http://localhost:8000') . '/payment-success.html?session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => ($_ENV['APP_URL'] ?? 'http://localhost:8000') . '/pricing.html',
+            'client_reference_id' => (string)$_SESSION['user_id'], // Link payment to user
+        ]);
+        
+        echo json_encode(['sessionId' => $session->id]);
+    } catch (\Stripe\Exception\ApiErrorException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to create checkout session: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+// Verify payment and upgrade user to Pro
+if ($uri === '/api/payment-success' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    requireAuth(); // User must be logged in
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!isset($input['session_id'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing session_id']);
+        exit;
+    }
+    
+    $stripeSecretKey = $_ENV['STRIPE_SECRET_KEY'] ?? '';
+    if (empty($stripeSecretKey)) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Stripe not configured']);
+        exit;
+    }
+    
+    try {
+        // Retrieve the session from Stripe
+        $session = \Stripe\Checkout\Session::retrieve($input['session_id']);
+        
+        // Verify payment was successful
+        if ($session->payment_status !== 'paid') {
+            http_response_code(400);
+            echo json_encode(['error' => 'Payment not completed']);
+            exit;
+        }
+        
+        // Get the user ID from client_reference_id
+        $userId = $session->client_reference_id;
+        
+        if (empty($userId)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid session data']);
+            exit;
+        }
+        
+        // Update user's subscription status in database
+        $db = getDB();
+        if (!$db) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Database connection failed']);
+            exit;
+        }
+        
+        $stmt = $db->prepare("UPDATE users SET subscription_status = 'active' WHERE id = ?");
+        $stmt->execute([$userId]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Subscription activated successfully!',
+            'subscription_status' => 'active'
+        ]);
+    } catch (\Stripe\Exception\ApiErrorException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to verify payment: ' . $e->getMessage()]);
     }
     exit;
 }
