@@ -33,7 +33,6 @@
                     <span class="font-bold text-xl tracking-tight text-gray-900">FundFinder</span>
                 </div>
                 <div class="flex items-center" id="nav-actions">
-                    <!-- Auth State toggled via JS -->
                     <button onclick="mockLogin()" id="login-btn" class="text-gray-600 hover:text-blue-600 font-medium px-3 py-2 rounded-md text-sm">
                         <i class="fab fa-google mr-1"></i> Sign In
                     </button>
@@ -42,10 +41,10 @@
         </div>
     </nav>
 
-    <!-- Main Content Area -->
+    <!-- Main Content -->
     <main class="flex-grow container mx-auto px-4 py-8">
         
-        <!-- View: Landing Page -->
+        <!-- Landing View -->
         <div id="view-landing" class="max-w-3xl mx-auto text-center mt-10 fade-in">
             <h1 class="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
                 Find Capital for Your <span class="text-blue-600">Vision</span>
@@ -58,216 +57,163 @@
                     Get Started Free
                 </button>
             </div>
-            
-            <!-- Feature Grid -->
-            <div class="grid grid-cols-1 gap-8 sm:grid-cols-3 mt-16">
-                <div class="p-6 bg-white rounded-lg shadow-sm border border-gray-100">
-                    <div class="text-blue-600 text-3xl mb-4"><i class="fas fa-robot"></i></div>
-                    <h3 class="text-lg font-medium text-gray-900">AI Matching</h3>
-                    <p class="mt-2 text-base text-gray-500">Our AI analyzes your business profile to find hidden funding opportunities.</p>
-                </div>
-                <div class="p-6 bg-white rounded-lg shadow-sm border border-gray-100">
-                    <div class="text-green-600 text-3xl mb-4"><i class="fas fa-file-invoice-dollar"></i></div>
-                    <h3 class="text-lg font-medium text-gray-900">Grant Writing</h3>
-                    <p class="mt-2 text-base text-gray-500">Get AI-generated drafts for grant applications tailored to requirements.</p>
-                </div>
-                <div class="p-6 bg-white rounded-lg shadow-sm border border-gray-100">
-                    <div class="text-purple-600 text-3xl mb-4"><i class="fas fa-bell"></i></div>
-                    <h3 class="text-lg font-medium text-gray-900">Alerts</h3>
-                    <p class="mt-2 text-base text-gray-500">Never miss a deadline. Get notified when new funding drops.</p>
-                </div>
-            </div>
         </div>
 
-        <!-- View: App Dashboard (Hidden by default) -->
+        <!-- Dashboard View -->
         <div id="view-dashboard" class="hidden fade-in">
             <div class="max-w-4xl mx-auto">
                 
-                <!-- Subscription Banner (Mock) -->
-                <div id="sub-banner" class="bg-indigo-50 border-l-4 border-indigo-500 p-4 mb-6 hidden">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-info-circle text-indigo-500"></i>
-                        </div>
-                        <div class="ml-3">
-                            <p class="text-sm text-indigo-700">
-                                You are on the Free Tier. <a href="#" onclick="mockStripe()" class="font-medium underline text-indigo-700 hover:text-indigo-600">Upgrade to Pro</a> to see contact details.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
                     <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
                         <h3 class="text-lg leading-6 font-medium text-gray-900">Funding Search Profile</h3>
                         <p class="mt-1 max-w-2xl text-sm text-gray-500">Tell us about your business.</p>
                     </div>
                     <div class="px-4 py-5 sm:p-6">
-                        <form id="search-form" onsubmit="runSearch(event)">
+                        <form id="search-form" onsubmit="runRealSearch(event)">
                             <div class="grid grid-cols-1 gap-6">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Business Type</label>
-                                    <select id="biz-type" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border">
+                                    <select id="biz-type" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
                                         <option>Tech Startup</option>
                                         <option>Non-Profit / NGO</option>
                                         <option>Freelancer / Creative</option>
                                         <option>Small Business (Retail/Service)</option>
                                     </select>
                                 </div>
-
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Location</label>
-                                    <input type="text" id="location" class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2" placeholder="e.g. Austin, Texas">
+                                    <input type="text" id="location" class="mt-1 block w-full p-2 border border-gray-300 rounded-md" placeholder="e.g. Austin, Texas">
                                 </div>
-
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Funding Purpose</label>
-                                    <textarea id="purpose" rows="3" class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md border p-2" placeholder="e.g. Expanding inventory for my bakery, hiring 2 developers..."></textarea>
+                                    <textarea id="purpose" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md" placeholder="e.g. Expanding inventory..."></textarea>
                                 </div>
-
-                                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    <i class="fas fa-magic mr-2 mt-1"></i> Find Funding
+                                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                                    <i class="fas fa-magic mr-2 mt-1"></i> Find Funding with AI
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
 
-                <!-- Results Area -->
-                <div id="results-area" class="hidden">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Tailored Opportunities</h2>
-                    
-                    <!-- Single Result Card -->
-                    <div class="space-y-4" id="results-container">
-                        <!-- Results injected by JS -->
-                    </div>
-                </div>
-
                 <!-- Loading State -->
                 <div id="loader-area" class="hidden flex flex-col items-center justify-center py-12">
                     <div class="loader mb-4"></div>
-                    <p class="text-gray-500 animate-pulse">Analyzing 14,000+ databases...</p>
+                    <p class="text-gray-500 animate-pulse">AI is analyzing funding sources...</p>
+                </div>
+
+                <!-- Results Area -->
+                <div id="results-area" class="hidden space-y-4">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Tailored Opportunities</h2>
+                    <div id="results-container" class="space-y-4"></div>
+                </div>
+
+                <!-- Error Area -->
+                 <div id="error-area" class="hidden bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                    <p class="text-red-700" id="error-msg">Something went wrong.</p>
                 </div>
 
             </div>
         </div>
     </main>
 
-    <footer class="bg-white border-t border-gray-200 mt-auto">
-        <div class="max-w-7xl mx-auto py-6 px-4 overflow-hidden sm:px-6 lg:px-8">
-            <p class="text-center text-base text-gray-400">
-                &copy; 2025 FundFinder Inc. Built with PHP & SQLite.
-            </p>
-        </div>
-    </footer>
-
-    <!-- Scripts for Interactivity -->
     <script>
-        // Mock State
+        // --- 1. AUTH STATE (Still mocked for now) ---
         let isLoggedIn = false;
-        let isPro = false;
 
         function mockLogin() {
-            // Simulates Google OAuth Redirect
             const btn = document.getElementById('login-btn');
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Redirecting...';
-            
             setTimeout(() => {
                 isLoggedIn = true;
-                updateUI();
-            }, 1000);
-        }
-
-        function updateUI() {
-            if (isLoggedIn) {
                 document.getElementById('view-landing').classList.add('hidden');
                 document.getElementById('view-dashboard').classList.remove('hidden');
-                
-                // Update Nav
-                const nav = document.getElementById('nav-actions');
-                nav.innerHTML = `
+                document.getElementById('nav-actions').innerHTML = `
                     <div class="flex items-center space-x-4">
-                        <span class="text-gray-600 text-sm hidden sm:block">welcome@user.com</span>
-                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" class="h-8 w-8 rounded-full border border-gray-300">
-                        <button onclick="window.location.reload()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-sign-out-alt"></i></button>
-                    </div>
-                `;
-                document.getElementById('sub-banner').classList.remove('hidden');
-            }
+                        <span class="text-gray-600 text-sm">welcome@user.com</span>
+                        <div class="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">U</div>
+                    </div>`;
+            }, 800);
         }
 
-        function runSearch(e) {
+        // --- 2. REAL API CALL ---
+        async function runRealSearch(e) {
             e.preventDefault();
-            const type = document.getElementById('biz-type').value;
-            const loc = document.getElementById('location').value;
             
-            if(!loc) { alert("Please enter a location"); return; }
+            const type = document.getElementById('biz-type').value;
+            const location = document.getElementById('location').value;
+            const purpose = document.getElementById('purpose').value;
 
-            // Hide form, show loader
+            if(!location) { alert("Please enter a location"); return; }
+
+            // Reset UI
             document.getElementById('results-area').classList.add('hidden');
+            document.getElementById('error-area').classList.add('hidden');
             document.getElementById('loader-area').classList.remove('hidden');
             document.getElementById('loader-area').classList.add('flex');
 
-            // Simulate API Call to PHP/Gemini
-            setTimeout(() => {
+            try {
+                // The fetch call to our PHP Backend
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type, location, purpose })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                renderRealResults(data);
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('error-msg').innerText = "Error: " + err.message;
+                document.getElementById('error-area').classList.remove('hidden');
+            } finally {
                 document.getElementById('loader-area').classList.add('hidden');
                 document.getElementById('loader-area').classList.remove('flex');
-                document.getElementById('results-area').classList.remove('hidden');
-                renderResults(type, loc);
-            }, 2000);
+            }
         }
 
-        function renderResults(type, loc) {
+        function renderRealResults(results) {
             const container = document.getElementById('results-container');
-            // Mock Data based on inputs
-            const html = `
-                <div class="bg-white shadow rounded-lg p-6 border-l-4 border-green-500 hover:shadow-md transition">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Grant</span>
-                            <h4 class="text-xl font-bold text-gray-900 mt-1">${loc} Small Biz Growth Fund</h4>
-                            <p class="text-sm text-gray-500 mt-1">Matches your profile: ${type}</p>
-                        </div>
-                        <span class="font-bold text-gray-900">$5,000 - $25,000</span>
-                    </div>
-                    <div class="mt-4 text-gray-600 text-sm">
-                        <p><strong>Qualifications:</strong> Must be operating in ${loc} for >1 year. Focused on community impact.</p>
-                    </div>
-                    <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
-                        <span class="text-sm text-red-600 font-medium"><i class="far fa-clock"></i> Due in 12 days</span>
-                        <button class="text-blue-600 hover:text-blue-800 font-medium text-sm">Apply Now &rarr;</button>
-                    </div>
-                </div>
+            let html = '';
 
-                <div class="bg-white shadow rounded-lg p-6 border-l-4 border-blue-500 hover:shadow-md transition">
+            results.forEach(item => {
+                // Determine color based on type
+                let borderClass = 'border-blue-500';
+                let bgClass = 'bg-blue-100 text-blue-800';
+                if(item.type && item.type.toLowerCase().includes('grant')) {
+                    borderClass = 'border-green-500';
+                    bgClass = 'bg-green-100 text-green-800';
+                }
+
+                html += `
+                <div class="bg-white shadow rounded-lg p-6 border-l-4 ${borderClass} hover:shadow-md transition">
                     <div class="flex justify-between items-start">
                         <div>
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Low Interest Loan</span>
-                            <h4 class="text-xl font-bold text-gray-900 mt-1">Community Development Loan</h4>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}">${item.type || 'Opportunity'}</span>
+                            <h4 class="text-xl font-bold text-gray-900 mt-1">${item.name}</h4>
+                            <p class="text-sm text-gray-500 mt-1">${item.match_reason}</p>
                         </div>
-                        <span class="font-bold text-gray-900">Up to $100k</span>
+                        <div class="text-right">
+                            <div class="font-bold text-gray-900">${item.amount || 'Var.'}</div>
+                            <div class="text-xs text-gray-400 mt-1">Due: ${item.deadline || 'Rolling'}</div>
+                        </div>
                     </div>
-                    <div class="mt-4 text-gray-600 text-sm">
-                        <p><strong>Qualifications:</strong> Credit score >600. 3% Interest rate fixed for 5 years.</p>
+                    <div class="mt-4 pt-4 border-t border-gray-100 flex justify-end">
+                        <a href="${item.link || '#'}" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center">
+                            Apply Now <i class="fas fa-external-link-alt ml-1"></i>
+                        </a>
                     </div>
-                    <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
-                        <span class="text-sm text-gray-500">Rolling Deadline</span>
-                        <button class="text-blue-600 hover:text-blue-800 font-medium text-sm">Check Rates &rarr;</button>
-                    </div>
-                </div>
-            `;
+                </div>`;
+            });
+
             container.innerHTML = html;
-        }
-
-        function mockStripe() {
-            const banner = document.getElementById('sub-banner');
-            banner.innerHTML = `
-                <div class="flex items-center justify-between w-full">
-                    <span class="text-green-700 font-bold"><i class="fas fa-check-circle"></i> Upgrade Successful! You are now on Pro.</span>
-                </div>
-            `;
-            banner.className = "bg-green-50 border-l-4 border-green-500 p-4 mb-6";
-            isPro = true;
+            document.getElementById('results-area').classList.remove('hidden');
         }
     </script>
 </body>
