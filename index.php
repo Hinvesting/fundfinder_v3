@@ -444,7 +444,7 @@ if ($uri === '/api/checkout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         'name' => 'FundFinder Pro',
                         'description' => 'Unlimited funding searches and saved items',
                     ],
-                    'unit_amount' => 2900, // $29.00
+                    'unit_amount' => 4900, // $49.00
                 ],
                 'quantity' => 1,
             ]],
