@@ -221,11 +221,22 @@ Use saved items to:
 ### Upgrade to Pro
 
 1. Click **"Upgrade to Pro"** button
-2. Review pricing ($29 one-time payment)
+2. Review pricing ($49 one-time payment)
 3. Click **"Proceed to Checkout"**
 4. Enter payment details (secure Stripe checkout)
 5. Complete payment
 6. **Instant activation** - start unlimited searches immediately!
+
+### Manage Your Subscription (Pro Users)
+
+Once you're a Pro user, you'll see a **"Manage Subscription"** button instead of the upgrade button.
+
+Click it to:
+- View payment history and invoices
+- Update payment method
+- Cancel your subscription (if needed)
+
+**Note**: The management portal is securely hosted by Stripe, our payment provider.
 
 ### Check Searches Remaining (Free Users)
 
@@ -351,6 +362,19 @@ Try:
 ### Is my payment information secure?
 
 Absolutely. We use **Stripe**, the same payment processor used by Amazon, Shopify, and Google. We never store your credit card information.
+
+### Can I manage my subscription?
+
+Yes! Pro users can access the **Customer Portal** anytime:
+
+1. Click **"Manage Subscription"** button (appears after upgrading)
+2. You'll be redirected to the secure Stripe portal
+3. From there you can:
+   - View payment history and invoices
+   - Update payment method
+   - Download receipts
+
+**Note**: Pro is a one-time payment (not recurring), so there are no recurring charges to manage.
 
 ### Can I get a refund?
 

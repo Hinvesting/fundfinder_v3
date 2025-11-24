@@ -153,6 +153,7 @@ CREATE TABLE users (
 - `email`: Unique email address (used for login)
 - `password`: BCrypt hashed password
 - `subscription_status`: `'free'` or `'active'` (Pro)
+- `stripe_customer_id`: Stripe Customer ID (stored after first payment)
 - `created_at`: Account creation timestamp
 
 ### Table: saved_items
@@ -502,6 +503,27 @@ Verify payment and activate Pro subscription.
 - `401`: Not authenticated
 - `400`: Missing session_id or payment not completed
 - `500`: Stripe verification failed or database error
+
+---
+
+#### POST /api/portal
+Create Stripe Customer Portal session for subscription management.
+
+**Authentication**: Required
+
+**Success Response (200)**:
+```json
+{
+  "url": "https://billing.stripe.com/session/..."
+}
+```
+
+**Error Responses**:
+- `401`: Not authenticated
+- `400`: No active subscription found
+- `500`: Failed to create portal session
+
+**Usage**: Redirect user to the returned URL to manage their subscription (update payment method, view invoices, cancel subscription).
 
 ---
 
