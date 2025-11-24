@@ -6,65 +6,63 @@ use Dotenv\Dotenv;
 session_start();
 
 // 1. LOAD CONFIG
-// Ensure you have a .env file with GEMINI_API_KEY=...
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->safeLoad();
 
-// 1A. DATABASE CONNECTION
+// 1A. DATABASE CONNECTION (SQLite3)
 function getDB() {
-    $host = $_ENV['DB_HOST'] ?? 'localhost';
-    $dbname = $_ENV['DB_NAME'] ?? 'fundfinder';
-    $user = $_ENV['DB_USER'] ?? 'root';
-    $pass = $_ENV['DB_PASS'] ?? '';
+    $dbPath = $_ENV['DB_PATH'] ?? __DIR__ . '/database.sqlite';
     
     try {
-        $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        return $pdo;
-    } catch (PDOException $e) {
+        $db = new SQLite3($dbPath);
+        $db->busyTimeout(5000);
+        return $db;
+    } catch (Exception $e) {
+        error_log('Database connection error: ' . $e->getMessage());
         return null;
     }
 }
 
-// 1B. INITIALIZE DATABASE TABLES
+// 1B. INITIALIZE DATABASE TABLES (SQLite Syntax)
 function initDatabase() {
     $db = getDB();
     if (!$db) return false;
     
-    // Create users table with subscription_status
+    // Create users table
     $db->exec("CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
         subscription_status TEXT DEFAULT 'free',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
     
-    // Create saved_items table with user_id
+    // Create saved_items table
     $db->exec("CREATE TABLE IF NOT EXISTS saved_items (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        type VARCHAR(50) NOT NULL,
-        amount VARCHAR(100),
-        deadline VARCHAR(100),
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        amount TEXT,
+        deadline TEXT,
         link TEXT,
         match_reason TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )");
     
     // Create usage_logs table for rate limiting
     $db->exec("CREATE TABLE IF NOT EXISTS usage_logs (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
         search_date TEXT NOT NULL,
-        count INT DEFAULT 0,
+        count INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        UNIQUE KEY user_date (user_id, search_date)
+        UNIQUE(user_id, search_date)
     )");
     
+    $db->close();
     return true;
 }
 
@@ -75,12 +73,9 @@ initDatabase();
 \Stripe\Stripe::setApiKey($_ENV['STRIPE_SECRET_KEY'] ?? '');
 
 // 2. HELPER: Clean AI Output
-// LLMs often wrap JSON in markdown like ```json ... ```. This strips that out.
 function cleanAIJson($text) {
-    // Remove markdown code blocks
     $text = preg_replace('/^`{3}(json)?/m', '', $text);
     $text = preg_replace('/`{3}$/m', '', $text);
-    // Remove any leading/trailing whitespace
     return trim($text);
 }
 
@@ -104,11 +99,14 @@ function getDailySearchCount($userId) {
     if (!$db) return 0;
     
     $today = date('Y-m-d');
-    $stmt = $db->prepare("SELECT count FROM usage_logs WHERE user_id = ? AND search_date = ?");
-    $stmt->execute([$userId, $today]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare("SELECT count FROM usage_logs WHERE user_id = :user_id AND search_date = :search_date");
+    $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
+    $stmt->bindValue(':search_date', $today, SQLITE3_TEXT);
+    $result = $stmt->execute();
+    $row = $result->fetchArray(SQLITE3_ASSOC);
     
-    return $result ? (int)$result['count'] : 0;
+    $db->close();
+    return $row ? (int)$row['count'] : 0;
 }
 
 // 2D. HELPER: Increment User's Daily Search Count
@@ -118,14 +116,29 @@ function incrementSearchCount($userId) {
     
     $today = date('Y-m-d');
     
-    // Insert or update usage log
-    $stmt = $db->prepare("
-        INSERT INTO usage_logs (user_id, search_date, count) 
-        VALUES (?, ?, 1)
-        ON DUPLICATE KEY UPDATE count = count + 1
-    ");
+    // Check if record exists
+    $stmt = $db->prepare("SELECT id, count FROM usage_logs WHERE user_id = :user_id AND search_date = :search_date");
+    $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
+    $stmt->bindValue(':search_date', $today, SQLITE3_TEXT);
+    $result = $stmt->execute();
+    $row = $result->fetchArray(SQLITE3_ASSOC);
     
-    return $stmt->execute([$userId, $today]);
+    if ($row) {
+        // Update existing record
+        $stmt = $db->prepare("UPDATE usage_logs SET count = count + 1 WHERE user_id = :user_id AND search_date = :search_date");
+        $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
+        $stmt->bindValue(':search_date', $today, SQLITE3_TEXT);
+        $success = $stmt->execute();
+    } else {
+        // Insert new record
+        $stmt = $db->prepare("INSERT INTO usage_logs (user_id, search_date, count) VALUES (:user_id, :search_date, 1)");
+        $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
+        $stmt->bindValue(':search_date', $today, SQLITE3_TEXT);
+        $success = $stmt->execute();
+    }
+    
+    $db->close();
+    return $success !== false;
 }
 
 // 2E. HELPER: Check Rate Limit
@@ -134,20 +147,24 @@ function checkRateLimit($userId) {
     if (!$db) return ['allowed' => false, 'error' => 'Database connection failed'];
     
     // Get user's subscription status
-    $stmt = $db->prepare("SELECT subscription_status FROM users WHERE id = ?");
-    $stmt->execute([$userId]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare("SELECT subscription_status FROM users WHERE id = :user_id");
+    $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
+    $result = $stmt->execute();
+    $user = $result->fetchArray(SQLITE3_ASSOC);
     
     if (!$user) {
+        $db->close();
         return ['allowed' => false, 'error' => 'User not found'];
     }
     
     // Pro users have unlimited searches
     if ($user['subscription_status'] === 'active') {
+        $db->close();
         return ['allowed' => true, 'subscription' => 'active'];
     }
     
     // Free users: check daily limit (3 searches)
+    $db->close();
     $dailyCount = getDailySearchCount($userId);
     $freeLimit = 3;
     
@@ -286,9 +303,11 @@ if ($uri === '/api/register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     // Check if email already exists
-    $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
-    $stmt->execute([$input['email']]);
-    if ($stmt->fetch()) {
+    $stmt = $db->prepare("SELECT id FROM users WHERE email = :email");
+    $stmt->bindValue(':email', $input['email'], SQLITE3_TEXT);
+    $result = $stmt->execute();
+    if ($result->fetchArray(SQLITE3_ASSOC)) {
+        $db->close();
         http_response_code(409);
         echo json_encode(['error' => 'Email already registered']);
         exit;
@@ -296,17 +315,20 @@ if ($uri === '/api/register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Hash password and create user
     $hashedPassword = password_hash($input['password'], PASSWORD_BCRYPT);
-    $stmt = $db->prepare("INSERT INTO users (name, email, password) VALUES (?, ?, ?)");
+    $stmt = $db->prepare("INSERT INTO users (name, email, password) VALUES (:name, :email, :password)");
+    $stmt->bindValue(':name', $input['name'], SQLITE3_TEXT);
+    $stmt->bindValue(':email', $input['email'], SQLITE3_TEXT);
+    $stmt->bindValue(':password', $hashedPassword, SQLITE3_TEXT);
     
-    try {
-        $stmt->execute([$input['name'], $input['email'], $hashedPassword]);
-        $userId = $db->lastInsertId();
+    if ($stmt->execute()) {
+        $userId = $db->lastInsertRowID();
         
         // Start session
         $_SESSION['user_id'] = $userId;
         $_SESSION['user_name'] = $input['name'];
         $_SESSION['user_email'] = $input['email'];
         
+        $db->close();
         echo json_encode([
             'success' => true,
             'user' => [
@@ -315,7 +337,8 @@ if ($uri === '/api/register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 'email' => $input['email']
             ]
         ]);
-    } catch (PDOException $e) {
+    } else {
+        $db->close();
         http_response_code(500);
         echo json_encode(['error' => 'Failed to create user']);
     }
@@ -341,11 +364,13 @@ if ($uri === '/api/login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    $stmt = $db->prepare("SELECT id, name, email, password FROM users WHERE email = ?");
-    $stmt->execute([$input['email']]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare("SELECT id, name, email, password FROM users WHERE email = :email");
+    $stmt->bindValue(':email', $input['email'], SQLITE3_TEXT);
+    $result = $stmt->execute();
+    $user = $result->fetchArray(SQLITE3_ASSOC);
     
     if (!$user || !password_verify($input['password'], $user['password'])) {
+        $db->close();
         http_response_code(401);
         echo json_encode(['error' => 'Invalid email or password']);
         exit;
@@ -356,6 +381,7 @@ if ($uri === '/api/login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['user_name'] = $user['name'];
     $_SESSION['user_email'] = $user['email'];
     
+    $db->close();
     echo json_encode([
         'success' => true,
         'user' => [
@@ -387,9 +413,10 @@ if ($uri === '/api/me' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         $dailySearchesLeft = 0;
         
         if ($db) {
-            $stmt = $db->prepare("SELECT subscription_status FROM users WHERE id = ?");
-            $stmt->execute([$_SESSION['user_id']]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt = $db->prepare("SELECT subscription_status FROM users WHERE id = :user_id");
+            $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+            $result = $stmt->execute();
+            $user = $result->fetchArray(SQLITE3_ASSOC);
             if ($user) {
                 $subscriptionStatus = $user['subscription_status'];
             }
@@ -401,6 +428,8 @@ if ($uri === '/api/me' && $_SERVER['REQUEST_METHOD'] === 'GET') {
                 $dailyCount = getDailySearchCount($_SESSION['user_id']);
                 $dailySearchesLeft = max(0, 3 - $dailyCount);
             }
+            
+            $db->close();
         }
         
         echo json_encode([
@@ -510,9 +539,11 @@ if ($uri === '/api/payment-success' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         
-        $stmt = $db->prepare("UPDATE users SET subscription_status = 'active' WHERE id = ?");
-        $stmt->execute([$userId]);
+        $stmt = $db->prepare("UPDATE users SET subscription_status = 'active' WHERE id = :user_id");
+        $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
+        $stmt->execute();
         
+        $db->close();
         echo json_encode([
             'success' => true,
             'message' => 'Subscription activated successfully!',
@@ -545,21 +576,21 @@ if ($uri === '/api/save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    $stmt = $db->prepare("INSERT INTO saved_items (user_id, name, type, amount, deadline, link, match_reason) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $db->prepare("INSERT INTO saved_items (user_id, name, type, amount, deadline, link, match_reason) 
+                          VALUES (:user_id, :name, :type, :amount, :deadline, :link, :match_reason)");
+    $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+    $stmt->bindValue(':name', $input['name'], SQLITE3_TEXT);
+    $stmt->bindValue(':type', $input['type'], SQLITE3_TEXT);
+    $stmt->bindValue(':amount', $input['amount'] ?? null, SQLITE3_TEXT);
+    $stmt->bindValue(':deadline', $input['deadline'] ?? null, SQLITE3_TEXT);
+    $stmt->bindValue(':link', $input['link'] ?? null, SQLITE3_TEXT);
+    $stmt->bindValue(':match_reason', $input['match_reason'] ?? null, SQLITE3_TEXT);
     
-    try {
-        $stmt->execute([
-            $_SESSION['user_id'],
-            $input['name'],
-            $input['type'],
-            $input['amount'] ?? null,
-            $input['deadline'] ?? null,
-            $input['link'] ?? null,
-            $input['match_reason'] ?? null
-        ]);
-        
+    if ($stmt->execute()) {
+        $db->close();
         echo json_encode(['success' => true, 'message' => 'Item saved successfully']);
-    } catch (PDOException $e) {
+    } else {
+        $db->close();
         http_response_code(500);
         echo json_encode(['error' => 'Failed to save item']);
     }
@@ -578,10 +609,17 @@ if ($uri === '/api/saved' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         exit;
     }
     
-    $stmt = $db->prepare("SELECT id, name, type, amount, deadline, link, match_reason, created_at FROM saved_items WHERE user_id = ? ORDER BY created_at DESC");
-    $stmt->execute([$_SESSION['user_id']]);
-    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare("SELECT id, name, type, amount, deadline, link, match_reason, created_at 
+                          FROM saved_items WHERE user_id = :user_id ORDER BY created_at DESC");
+    $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+    $result = $stmt->execute();
     
+    $items = [];
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $items[] = $row;
+    }
+    
+    $db->close();
     echo json_encode(['items' => $items]);
     exit;
 }
