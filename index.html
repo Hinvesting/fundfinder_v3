@@ -68,6 +68,9 @@
                     </button>
                     
                     <!-- LOGGED IN VIEW (Hidden by default) -->
+                    <button onclick="startCheckout()" id="upgrade-btn" class="hidden bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold px-4 py-2 rounded-md text-sm shadow-sm transition">
+                        <i class="fas fa-crown mr-1"></i> Upgrade to Pro
+                    </button>
                     <a href="#saved" onclick="loadSavedItems(event)" id="saved-link" class="hidden text-gray-600 hover:text-blue-600 font-medium px-3 py-2 rounded-md text-sm transition">
                         <i class="fas fa-bookmark mr-1"></i> Saved
                     </a>
@@ -330,6 +333,7 @@
         // ==================== GLOBAL STATE ====================
         let currentUser = null;
         let isAuthenticated = false;
+        let userSubscriptionStatus = 'free';
 
         // ==================== INITIALIZATION ====================
         window.addEventListener('DOMContentLoaded', async () => {
@@ -357,15 +361,18 @@
                 if (data.authenticated && data.user) {
                     isAuthenticated = true;
                     currentUser = data.user;
+                    userSubscriptionStatus = data.user.subscription_status || 'free';
                     updateNavForLoggedIn();
                 } else {
                     isAuthenticated = false;
                     currentUser = null;
+                    userSubscriptionStatus = 'free';
                     updateNavForGuest();
                 }
             } catch (err) {
                 console.error('Auth check failed:', err);
                 isAuthenticated = false;
+                userSubscriptionStatus = 'free';
                 updateNavForGuest();
             }
         }
@@ -380,6 +387,14 @@
             document.getElementById('saved-link').classList.remove('hidden');
             document.getElementById('user-info').classList.remove('hidden');
             
+            // Show/hide upgrade button based on subscription status
+            const upgradeBtn = document.getElementById('upgrade-btn');
+            if (userSubscriptionStatus === 'free') {
+                upgradeBtn.classList.remove('hidden');
+            } else {
+                upgradeBtn.classList.add('hidden');
+            }
+            
             // Update user info
             document.getElementById('user-email').textContent = currentUser.email;
             const avatar = document.getElementById('user-avatar');
@@ -393,6 +408,7 @@
             document.getElementById('join-btn').classList.remove('hidden');
             
             // Hide logged-in elements
+            document.getElementById('upgrade-btn').classList.add('hidden');
             document.getElementById('saved-link').classList.add('hidden');
             document.getElementById('user-info').classList.add('hidden');
         }
@@ -600,6 +616,12 @@
                 const data = await response.json();
                 
                 if (!response.ok) {
+                    // Check if it's a rate limit error
+                    if (response.status === 429 && data.error && data.error.includes('Free limit reached')) {
+                        showRateLimitError(data.error);
+                        document.getElementById('loader-area').classList.add('hidden');
+                        return;
+                    }
                     throw new Error(data.error || 'Search failed');
                 }
                 
@@ -616,6 +638,29 @@
             } finally {
                 document.getElementById('loader-area').classList.add('hidden');
             }
+        }
+
+        // ==================== RATE LIMIT ERROR HANDLER ====================
+        function showRateLimitError(errorMessage) {
+            const errorArea = document.getElementById('error-area');
+            const errorMsgDiv = document.getElementById('error-msg');
+            
+            errorMsgDiv.innerHTML = `
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <p class="font-semibold mb-2">${errorMessage}</p>
+                        <p class="text-sm">Upgrade to Pro for unlimited AI searches and priority support.</p>
+                    </div>
+                    <button 
+                        onclick="startCheckout()" 
+                        class="ml-4 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold px-6 py-2 rounded-lg shadow-md transition transform hover:-translate-y-0.5 flex items-center whitespace-nowrap"
+                    >
+                        <i class="fas fa-crown mr-2"></i> Upgrade Now
+                    </button>
+                </div>
+            `;
+            
+            errorArea.classList.remove('hidden');
         }
 
         // ==================== RENDER RESULTS ====================
@@ -826,6 +871,56 @@
             
             // Scroll to results
             document.getElementById('results-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // ==================== STRIPE CHECKOUT ====================
+        async function startCheckout() {
+            if (!isAuthenticated || !currentUser) {
+                alert('Please log in to upgrade your account');
+                openAuthModal('login');
+                return;
+            }
+            
+            try {
+                // Show loading state
+                const upgradeBtn = document.getElementById('upgrade-btn');
+                const originalText = upgradeBtn ? upgradeBtn.innerHTML : '';
+                if (upgradeBtn) {
+                    upgradeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
+                    upgradeBtn.disabled = true;
+                }
+                
+                // Create checkout session
+                const response = await fetch('/api/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin'
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to create checkout session');
+                }
+                
+                if (data.sessionId) {
+                    // Redirect to Stripe Checkout
+                    window.location.href = `https://checkout.stripe.com/pay/${data.sessionId}`;
+                } else {
+                    throw new Error('No session ID returned');
+                }
+                
+            } catch (err) {
+                console.error('Checkout error:', err);
+                alert('Failed to start checkout: ' + err.message);
+                
+                // Restore button state
+                const upgradeBtn = document.getElementById('upgrade-btn');
+                if (upgradeBtn) {
+                    upgradeBtn.innerHTML = '<i class="fas fa-crown mr-1"></i> Upgrade to Pro';
+                    upgradeBtn.disabled = false;
+                }
+            }
         }
     </script>
 </body>
