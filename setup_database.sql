@@ -32,5 +32,15 @@ CREATE TABLE IF NOT EXISTS saved_items (
     INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Create usage_logs table for rate limiting
+CREATE TABLE IF NOT EXISTS usage_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    search_date TEXT NOT NULL,
+    count INT DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY user_date (user_id, search_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Display tables
 SHOW TABLES;

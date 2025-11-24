@@ -55,6 +55,16 @@ function initDatabase() {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )");
     
+    // Create usage_logs table for rate limiting
+    $db->exec("CREATE TABLE IF NOT EXISTS usage_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        search_date TEXT NOT NULL,
+        count INT DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY user_date (user_id, search_date)
+    )");
+    
     return true;
 }
 
@@ -86,6 +96,71 @@ function requireAuth() {
         echo json_encode(['error' => 'Unauthorized. Please log in.']);
         exit;
     }
+}
+
+// 2C. HELPER: Get User's Daily Search Count
+function getDailySearchCount($userId) {
+    $db = getDB();
+    if (!$db) return 0;
+    
+    $today = date('Y-m-d');
+    $stmt = $db->prepare("SELECT count FROM usage_logs WHERE user_id = ? AND search_date = ?");
+    $stmt->execute([$userId, $today]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    return $result ? (int)$result['count'] : 0;
+}
+
+// 2D. HELPER: Increment User's Daily Search Count
+function incrementSearchCount($userId) {
+    $db = getDB();
+    if (!$db) return false;
+    
+    $today = date('Y-m-d');
+    
+    // Insert or update usage log
+    $stmt = $db->prepare("
+        INSERT INTO usage_logs (user_id, search_date, count) 
+        VALUES (?, ?, 1)
+        ON DUPLICATE KEY UPDATE count = count + 1
+    ");
+    
+    return $stmt->execute([$userId, $today]);
+}
+
+// 2E. HELPER: Check Rate Limit
+function checkRateLimit($userId) {
+    $db = getDB();
+    if (!$db) return ['allowed' => false, 'error' => 'Database connection failed'];
+    
+    // Get user's subscription status
+    $stmt = $db->prepare("SELECT subscription_status FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$user) {
+        return ['allowed' => false, 'error' => 'User not found'];
+    }
+    
+    // Pro users have unlimited searches
+    if ($user['subscription_status'] === 'active') {
+        return ['allowed' => true, 'subscription' => 'active'];
+    }
+    
+    // Free users: check daily limit (3 searches)
+    $dailyCount = getDailySearchCount($userId);
+    $freeLimit = 3;
+    
+    if ($dailyCount >= $freeLimit) {
+        return [
+            'allowed' => false, 
+            'error' => 'Free limit reached. Upgrade to Pro for unlimited searches.',
+            'daily_count' => $dailyCount,
+            'limit' => $freeLimit
+        ];
+    }
+    
+    return ['allowed' => true, 'subscription' => 'free', 'daily_count' => $dailyCount];
 }
 
 // 3. CORE LOGIC: AI Search (UPDATED: GEO-ENFORCER)
@@ -309,6 +384,7 @@ if ($uri === '/api/me' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         // Fetch subscription status from database
         $db = getDB();
         $subscriptionStatus = 'free';
+        $dailySearchesLeft = 0;
         
         if ($db) {
             $stmt = $db->prepare("SELECT subscription_status FROM users WHERE id = ?");
@@ -316,6 +392,14 @@ if ($uri === '/api/me' && $_SERVER['REQUEST_METHOD'] === 'GET') {
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($user) {
                 $subscriptionStatus = $user['subscription_status'];
+            }
+            
+            // Calculate daily searches left
+            if ($subscriptionStatus === 'active') {
+                $dailySearchesLeft = 'unlimited';
+            } else {
+                $dailyCount = getDailySearchCount($_SESSION['user_id']);
+                $dailySearchesLeft = max(0, 3 - $dailyCount);
             }
         }
         
@@ -325,7 +409,8 @@ if ($uri === '/api/me' && $_SERVER['REQUEST_METHOD'] === 'GET') {
                 'id' => $_SESSION['user_id'],
                 'name' => $_SESSION['user_name'],
                 'email' => $_SESSION['user_email'],
-                'subscription_status' => $subscriptionStatus
+                'subscription_status' => $subscriptionStatus,
+                'daily_searches_left' => $dailySearchesLeft
             ]
         ]);
     } else {
@@ -501,10 +586,29 @@ if ($uri === '/api/saved' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     exit;
 }
 
-// 4C. PUBLIC ROUTES - AI Search
+// 4C. PROTECTED ROUTES - AI Search (Rate Limited)
 // API Endpoint called by your frontend
 if ($uri === '/api/search' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
+    
+    // REQUIRE AUTHENTICATION
+    if (!isAuthenticated()) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Please login to search']);
+        exit;
+    }
+    
+    // CHECK RATE LIMIT
+    $rateLimitCheck = checkRateLimit($_SESSION['user_id']);
+    if (!$rateLimitCheck['allowed']) {
+        http_response_code(429);
+        echo json_encode([
+            'error' => $rateLimitCheck['error'],
+            'daily_count' => $rateLimitCheck['daily_count'] ?? null,
+            'limit' => $rateLimitCheck['limit'] ?? null
+        ]);
+        exit;
+    }
     
     // Get JSON input
     $input = json_decode(file_get_contents('php://input'), true);
@@ -518,6 +622,11 @@ if ($uri === '/api/search' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Execute AI Search
     $results = searchFunding($input['type'], $input['location'], $input['purpose'] ?? 'General funding');
+    
+    // INCREMENT SEARCH COUNT (only if search was successful)
+    if (!isset($results['error'])) {
+        incrementSearchCount($_SESSION['user_id']);
+    }
     
     echo json_encode($results);
     exit;
