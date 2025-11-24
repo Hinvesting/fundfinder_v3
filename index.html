@@ -19,9 +19,31 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .fade-in { animation: fadeIn 0.5s; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
-        .modal.active { display: flex; align-items: center; justify-content: center; }
-        .modal-content { background-color: #fefefe; margin: auto; padding: 0; border-radius: 8px; max-width: 500px; width: 90%; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .modal { 
+            display: none; 
+            position: fixed; 
+            z-index: 50; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.5); 
+        }
+        .modal.active { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+        }
+        .modal-content { 
+            background-color: #fefefe; 
+            margin: auto; 
+            padding: 0; 
+            border-radius: 12px; 
+            max-width: 480px; 
+            width: 90%; 
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
@@ -34,24 +56,28 @@
                     <i class="fas fa-search-dollar text-blue-600 text-2xl mr-2"></i>
                     <span class="font-bold text-xl tracking-tight text-gray-900">FundFinder</span>
                 </div>
-                <!-- Navigation Actions (Dynamic) -->
+                
+                <!-- Dynamic Navigation Actions -->
                 <div class="flex items-center space-x-3" id="nav-actions">
-                    <!-- Guest View: Sign In + Join Free -->
-                    <button onclick="openAuthModal('login')" id="signin-btn" class="text-gray-600 hover:text-blue-600 font-medium px-3 py-2 rounded-md text-sm">
+                    <!-- GUEST VIEW (Default) -->
+                    <button onclick="openAuthModal('login')" id="signin-btn" class="text-gray-600 hover:text-blue-600 font-medium px-4 py-2 rounded-md text-sm transition">
                         Sign In
                     </button>
-                    <button onclick="openAuthModal('register')" id="join-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm">
+                    <button onclick="openAuthModal('register')" id="join-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm shadow-sm transition">
                         Join Free
                     </button>
-                    <!-- Logged In View (hidden by default) -->
-                    <a href="#" id="saved-link" class="hidden text-gray-600 hover:text-blue-600 font-medium px-3 py-2 rounded-md text-sm">
+                    
+                    <!-- LOGGED IN VIEW (Hidden by default) -->
+                    <a href="#saved" onclick="loadSavedItems(event)" id="saved-link" class="hidden text-gray-600 hover:text-blue-600 font-medium px-3 py-2 rounded-md text-sm transition">
                         <i class="fas fa-bookmark mr-1"></i> Saved
                     </a>
-                    <div id="user-menu" class="hidden flex items-center space-x-3">
-                        <span class="text-gray-600 text-sm" id="user-email"></span>
-                        <div class="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold cursor-pointer" id="user-avatar">U</div>
-                        <button onclick="logout()" class="text-gray-600 hover:text-red-600 font-medium text-sm">
-                            <i class="fas fa-sign-out-alt"></i> Logout
+                    <div id="user-info" class="hidden flex items-center space-x-3">
+                        <span class="text-gray-600 text-sm font-medium" id="user-email"></span>
+                        <div class="h-9 w-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-sm cursor-pointer" id="user-avatar" title="User Profile">
+                            U
+                        </div>
+                        <button onclick="handleLogout()" class="text-gray-600 hover:text-red-600 font-medium text-sm transition">
+                            <i class="fas fa-sign-out-alt mr-1"></i> Sign Out
                         </button>
                     </div>
                 </div>
@@ -62,96 +88,151 @@
     <!-- Auth Modal -->
     <div id="auth-modal" class="modal">
         <div class="modal-content">
-            <!-- Modal Header with Toggle -->
-            <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-xl font-bold text-gray-900" id="modal-title">Welcome Back</h2>
-                    <button onclick="closeAuthModal()" class="text-gray-400 hover:text-gray-600">
+            <!-- Modal Header -->
+            <div class="px-6 py-5 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-bold text-gray-900" id="modal-title">Welcome Back</h2>
+                    <button onclick="closeAuthModal()" class="text-gray-400 hover:text-gray-600 transition">
                         <i class="fas fa-times text-xl"></i>
-                    </button>
-                </div>
-                <!-- Toggle Between Login/Register -->
-                <div class="flex space-x-2 bg-white rounded-lg p-1 border border-gray-200">
-                    <button onclick="switchAuthMode('login')" id="tab-login" class="flex-1 py-2 px-4 rounded-md text-sm font-medium transition bg-blue-600 text-white">
-                        Login
-                    </button>
-                    <button onclick="switchAuthMode('register')" id="tab-register" class="flex-1 py-2 px-4 rounded-md text-sm font-medium transition text-gray-600 hover:text-gray-900">
-                        Register
                     </button>
                 </div>
             </div>
             
             <!-- Modal Body -->
             <div class="px-6 py-6">
-                <!-- Login Form -->
+                <!-- LOGIN FORM -->
                 <form id="login-form" onsubmit="handleLogin(event)">
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                            <input type="email" id="login-email" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="you@example.com">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                            <input 
+                                type="email" 
+                                id="login-email" 
+                                required 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" 
+                                placeholder="you@example.com"
+                            >
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                            <input type="password" id="login-password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
+                            <input 
+                                type="password" 
+                                id="login-password" 
+                                required 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" 
+                                placeholder="••••••••"
+                            >
                         </div>
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition">
+                        <button 
+                            type="submit" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition shadow-sm"
+                        >
                             Sign In
                         </button>
+                        <div class="text-center pt-2">
+                            <button 
+                                type="button" 
+                                onclick="switchToRegister()" 
+                                class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                                Need an account? <span class="underline">Sign Up</span>
+                            </button>
+                        </div>
                     </div>
                 </form>
 
-                <!-- Register Form (Hidden by default) -->
+                <!-- REGISTER FORM (Hidden by default) -->
                 <form id="register-form" class="hidden" onsubmit="handleRegister(event)">
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                            <input type="text" id="register-name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="John Doe">
+                            <input 
+                                type="text" 
+                                id="register-name" 
+                                required 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" 
+                                placeholder="John Doe"
+                            >
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                            <input type="email" id="register-email" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="you@example.com">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                            <input 
+                                type="email" 
+                                id="register-email" 
+                                required 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" 
+                                placeholder="you@example.com"
+                            >
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                            <input type="password" id="register-password" required minlength="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
+                            <input 
+                                type="password" 
+                                id="register-password" 
+                                required 
+                                minlength="6" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" 
+                                placeholder="••••••••"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
                         </div>
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition">
+                        <button 
+                            type="submit" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition shadow-sm"
+                        >
                             Create Account
                         </button>
+                        <div class="text-center pt-2">
+                            <button 
+                                type="button" 
+                                onclick="switchToLogin()" 
+                                class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                                Have an account? <span class="underline">Login</span>
+                            </button>
+                        </div>
                     </div>
                 </form>
 
-                <!-- Error Message -->
-                <div id="auth-error" class="hidden mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm"></div>
+                <!-- Error/Success Messages -->
+                <div id="auth-message" class="hidden mt-4 px-4 py-3 rounded-lg text-sm"></div>
             </div>
         </div>
     </div>
 
     <!-- Main Content -->
     <main class="flex-grow container mx-auto px-4 py-8">
-        
-        <!-- Search Form (Always Visible) -->
         <div class="max-w-4xl mx-auto fade-in">
-            <div class="text-center mb-8">
-                <h1 class="text-4xl font-extrabold text-gray-900">
+            
+            <!-- Hero Section -->
+            <div class="text-center mb-10">
+                <h1 class="text-5xl font-extrabold text-gray-900 mb-4">
                     Find Capital for Your <span class="text-blue-600">Vision</span>
                 </h1>
-                <p class="mt-3 text-lg text-gray-500">
-                    AI-powered search for Grants, Loans, and Angel Investors
+                <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                    AI-powered search for Grants, Loans, and Angel Investors tailored to your business needs
                 </p>
             </div>
 
-            <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
-                <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900">Search for Funding</h3>
-                    <p class="mt-1 max-w-2xl text-sm text-gray-500">Tell us about your business needs.</p>
+            <!-- Search Form (ALWAYS EDITABLE) -->
+            <div class="bg-white shadow-lg rounded-xl overflow-hidden mb-8 border border-gray-100">
+                <div class="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+                    <h3 class="text-lg leading-6 font-semibold text-gray-900">
+                        <i class="fas fa-search mr-2 text-blue-600"></i>Search for Funding
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-600">Enter your business details to discover opportunities</p>
                 </div>
-                <div class="px-4 py-5 sm:p-6">
-                    <form id="search-form" onsubmit="handleSearch(event)">
-                        <div class="grid grid-cols-1 gap-6">
+                <div class="px-6 py-6">
+                    <form id="search-form" onsubmit="handleSearchSubmit(event)">
+                        <div class="space-y-5">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Business Type</label>
-                                <select id="biz-type" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i class="fas fa-briefcase text-gray-400 mr-1"></i> Business Type
+                                </label>
+                                <select 
+                                    id="biz-type" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
+                                >
                                     <option>Tech Startup</option>
                                     <option>Restaurant</option>
                                     <option>Retail Store</option>
@@ -159,18 +240,42 @@
                                     <option>Freelancer / Creative</option>
                                     <option>Small Business (Service)</option>
                                     <option>Manufacturing</option>
+                                    <option>Healthcare</option>
                                 </select>
                             </div>
+                            
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Location</label>
-                                <input type="text" id="location" class="mt-1 block w-full p-2 border border-gray-300 rounded-md" placeholder="e.g. Seattle, Washington" required>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i class="fas fa-map-marker-alt text-gray-400 mr-1"></i> Location
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="location" 
+                                    required 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" 
+                                    placeholder="e.g. Seattle, Washington"
+                                >
+                                <p class="text-xs text-gray-500 mt-1">Be specific for better results (City, State)</p>
                             </div>
+                            
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Funding Purpose</label>
-                                <textarea id="purpose" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md" placeholder="e.g. Need $10,000 for equipment to expand services"></textarea>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i class="fas fa-bullseye text-gray-400 mr-1"></i> Funding Purpose
+                                </label>
+                                <textarea 
+                                    id="purpose" 
+                                    rows="3" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none" 
+                                    placeholder="e.g. Need $15,000 for commercial kitchen equipment to expand catering services"
+                                ></textarea>
                             </div>
-                            <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 transition">
-                                <i class="fas fa-magic mr-2 mt-1"></i> Find Funding with AI
+                            
+                            <button 
+                                type="submit" 
+                                id="search-btn"
+                                class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-4 px-6 rounded-lg shadow-md hover:shadow-lg transition transform hover:-translate-y-0.5 flex items-center justify-center"
+                            >
+                                <i class="fas fa-magic mr-2"></i> Find Funding with AI
                             </button>
                         </div>
                     </form>
@@ -178,216 +283,334 @@
             </div>
 
             <!-- Loading State -->
-            <div id="loader-area" class="hidden flex flex-col items-center justify-center py-12">
-                <div class="loader mb-4"></div>
-                <p class="text-gray-500 animate-pulse">AI is analyzing funding sources...</p>
+            <div id="loader-area" class="hidden">
+                <div class="bg-white shadow-lg rounded-xl p-8 text-center border border-gray-100">
+                    <div class="loader mx-auto mb-4"></div>
+                    <p class="text-gray-600 font-medium animate-pulse">AI is analyzing funding sources...</p>
+                    <p class="text-sm text-gray-500 mt-2">This may take a few seconds</p>
+                </div>
             </div>
 
             <!-- Results Area -->
             <div id="results-area" class="hidden space-y-4">
-                <h2 class="text-2xl font-bold text-gray-900 mb-4">Tailored Opportunities</h2>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-3xl font-bold text-gray-900">
+                        <i class="fas fa-star text-yellow-500 mr-2"></i>Tailored Opportunities
+                    </h2>
+                    <span class="text-sm text-gray-500" id="result-count"></span>
+                </div>
                 <div id="results-container" class="space-y-4"></div>
             </div>
 
             <!-- Error Area -->
-            <div id="error-area" class="hidden bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-                <p class="text-red-700" id="error-msg">Something went wrong.</p>
+            <div id="error-area" class="hidden">
+                <div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-lg">
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-circle text-red-500 text-xl mr-3 mt-0.5"></i>
+                        <div>
+                            <h3 class="text-red-800 font-semibold">Error</h3>
+                            <p class="text-red-700 mt-1" id="error-msg"></p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
 
-    <script>
-        // --- GLOBAL STATE ---
-        let currentUser = null;
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-12">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <p class="text-center text-sm text-gray-500">
+                © 2025 FundFinder v3 - Built by Hinvesting Team
+            </p>
+        </div>
+    </footer>
 
-        // --- CHECK AUTH STATUS ON LOAD ---
+    <script>
+        // ==================== GLOBAL STATE ====================
+        let currentUser = null;
+        let isAuthenticated = false;
+
+        // ==================== INITIALIZATION ====================
+        window.addEventListener('DOMContentLoaded', async () => {
+            await checkAuthStatus();
+            
+            // Close modal when clicking outside
+            window.onclick = (event) => {
+                const modal = document.getElementById('auth-modal');
+                if (event.target === modal) {
+                    closeAuthModal();
+                }
+            };
+        });
+
+        // ==================== AUTH STATUS CHECK ====================
         async function checkAuthStatus() {
             try {
-                const response = await fetch('/api/me');
+                const response = await fetch('/api/me', {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                });
+                
                 const data = await response.json();
                 
-                if (data.authenticated) {
+                if (data.authenticated && data.user) {
+                    isAuthenticated = true;
                     currentUser = data.user;
-                    updateUIForLoggedIn();
+                    updateNavForLoggedIn();
+                } else {
+                    isAuthenticated = false;
+                    currentUser = null;
+                    updateNavForGuest();
                 }
             } catch (err) {
                 console.error('Auth check failed:', err);
+                isAuthenticated = false;
+                updateNavForGuest();
             }
         }
 
-        // --- AUTH MODAL FUNCTIONS ---
-        function openAuthModal(mode = 'login') {
-            document.getElementById('auth-modal').classList.add('active');
-            switchAuthMode(mode);
-        }
-
-        function closeAuthModal() {
-            document.getElementById('auth-modal').classList.remove('active');
-            document.getElementById('auth-error').classList.add('hidden');
-        }
-
-        function switchAuthMode(mode) {
-            const loginForm = document.getElementById('login-form');
-            const registerForm = document.getElementById('register-form');
-            const loginTab = document.getElementById('tab-login');
-            const registerTab = document.getElementById('tab-register');
-            const modalTitle = document.getElementById('modal-title');
-
-            if (mode === 'login') {
-                loginForm.classList.remove('hidden');
-                registerForm.classList.add('hidden');
-                loginTab.classList.add('bg-blue-600', 'text-white');
-                loginTab.classList.remove('text-gray-600');
-                registerTab.classList.remove('bg-blue-600', 'text-white');
-                registerTab.classList.add('text-gray-600');
-                modalTitle.textContent = 'Welcome Back';
-            } else {
-                registerForm.classList.remove('hidden');
-                loginForm.classList.add('hidden');
-                registerTab.classList.add('bg-blue-600', 'text-white');
-                registerTab.classList.remove('text-gray-600');
-                loginTab.classList.remove('bg-blue-600', 'text-white');
-                loginTab.classList.add('text-gray-600');
-                modalTitle.textContent = 'Create Account';
-            }
-            
-            document.getElementById('auth-error').classList.add('hidden');
-        }
-
-        // --- AUTH HANDLERS ---
-        async function handleLogin(event) {
-            event.preventDefault();
-            
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-            
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    currentUser = data.user;
-                    updateUIForLoggedIn();
-                    closeAuthModal();
-                } else {
-                    showAuthError(data.error || 'Login failed');
-                }
-            } catch (err) {
-                showAuthError('Network error. Please try again.');
-            }
-        }
-
-        async function handleRegister(event) {
-            event.preventDefault();
-            
-            const name = document.getElementById('register-name').value;
-            const email = document.getElementById('register-email').value;
-            const password = document.getElementById('register-password').value;
-            
-            try {
-                const response = await fetch('/api/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, password })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    currentUser = data.user;
-                    updateUIForLoggedIn();
-                    closeAuthModal();
-                } else {
-                    showAuthError(data.error || 'Registration failed');
-                }
-            } catch (err) {
-                showAuthError('Network error. Please try again.');
-            }
-        }
-
-        async function logout() {
-            try {
-                await fetch('/api/logout', { method: 'POST' });
-                currentUser = null;
-                updateUIForLoggedOut();
-            } catch (err) {
-                console.error('Logout failed:', err);
-            }
-        }
-
-        function showAuthError(message) {
-            const errorDiv = document.getElementById('auth-error');
-            errorDiv.textContent = message;
-            errorDiv.classList.remove('hidden');
-        }
-
-        // --- UI UPDATE FUNCTIONS ---
-        function updateUIForLoggedIn() {
+        // ==================== NAVIGATION UI UPDATES ====================
+        function updateNavForLoggedIn() {
             // Hide guest buttons
             document.getElementById('signin-btn').classList.add('hidden');
             document.getElementById('join-btn').classList.add('hidden');
             
             // Show logged-in elements
             document.getElementById('saved-link').classList.remove('hidden');
-            document.getElementById('user-menu').classList.remove('hidden');
+            document.getElementById('user-info').classList.remove('hidden');
+            
+            // Update user info
             document.getElementById('user-email').textContent = currentUser.email;
-            document.getElementById('user-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+            const avatar = document.getElementById('user-avatar');
+            avatar.textContent = currentUser.name.charAt(0).toUpperCase();
+            avatar.title = currentUser.name;
         }
 
-        function updateUIForLoggedOut() {
+        function updateNavForGuest() {
             // Show guest buttons
             document.getElementById('signin-btn').classList.remove('hidden');
             document.getElementById('join-btn').classList.remove('hidden');
             
             // Hide logged-in elements
             document.getElementById('saved-link').classList.add('hidden');
-            document.getElementById('user-menu').classList.add('hidden');
-            
-            // Clear any results
-            document.getElementById('results-area').classList.add('hidden');
+            document.getElementById('user-info').classList.add('hidden');
         }
 
-        // --- SEARCH HANDLER ---
-        async function handleSearch(event) {
+        // ==================== AUTH MODAL FUNCTIONS ====================
+        function openAuthModal(mode = 'login') {
+            document.getElementById('auth-modal').classList.add('active');
+            if (mode === 'register') {
+                switchToRegister();
+            } else {
+                switchToLogin();
+            }
+            clearAuthMessage();
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal').classList.remove('active');
+            clearAuthMessage();
+            clearForms();
+        }
+
+        function switchToLogin() {
+            document.getElementById('login-form').classList.remove('hidden');
+            document.getElementById('register-form').classList.add('hidden');
+            document.getElementById('modal-title').textContent = 'Welcome Back';
+            clearAuthMessage();
+        }
+
+        function switchToRegister() {
+            document.getElementById('register-form').classList.remove('hidden');
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('modal-title').textContent = 'Create Account';
+            clearAuthMessage();
+        }
+
+        function clearForms() {
+            document.getElementById('login-form').reset();
+            document.getElementById('register-form').reset();
+        }
+
+        function showAuthMessage(message, isError = false) {
+            const msgDiv = document.getElementById('auth-message');
+            msgDiv.textContent = message;
+            msgDiv.classList.remove('hidden', 'bg-red-50', 'text-red-700', 'bg-green-50', 'text-green-700', 'border', 'border-red-200', 'border-green-200');
+            
+            if (isError) {
+                msgDiv.classList.add('bg-red-50', 'text-red-700', 'border', 'border-red-200');
+            } else {
+                msgDiv.classList.add('bg-green-50', 'text-green-700', 'border', 'border-green-200');
+            }
+        }
+
+        function clearAuthMessage() {
+            const msgDiv = document.getElementById('auth-message');
+            msgDiv.classList.add('hidden');
+            msgDiv.textContent = '';
+        }
+
+        // ==================== AUTH HANDLERS ====================
+        async function handleLogin(event) {
             event.preventDefault();
             
-            // Check if user is logged in
-            if (!currentUser) {
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            
+            if (!email || !password) {
+                showAuthMessage('Please fill in all fields', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    isAuthenticated = true;
+                    currentUser = data.user;
+                    updateNavForLoggedIn();
+                    closeAuthModal();
+                    showAuthMessage('Login successful!', false);
+                } else {
+                    showAuthMessage(data.error || 'Login failed. Please try again.', true);
+                }
+            } catch (err) {
+                console.error('Login error:', err);
+                showAuthMessage('Network error. Please check your connection.', true);
+            }
+        }
+
+        async function handleRegister(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('register-name').value.trim();
+            const email = document.getElementById('register-email').value.trim();
+            const password = document.getElementById('register-password').value;
+            
+            if (!name || !email || !password) {
+                showAuthMessage('Please fill in all fields', true);
+                return;
+            }
+            
+            if (password.length < 6) {
+                showAuthMessage('Password must be at least 6 characters', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ name, email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    isAuthenticated = true;
+                    currentUser = data.user;
+                    updateNavForLoggedIn();
+                    closeAuthModal();
+                    showAuthMessage('Account created successfully!', false);
+                } else {
+                    showAuthMessage(data.error || 'Registration failed. Please try again.', true);
+                }
+            } catch (err) {
+                console.error('Registration error:', err);
+                showAuthMessage('Network error. Please check your connection.', true);
+            }
+        }
+
+        async function handleLogout() {
+            if (!confirm('Are you sure you want to sign out?')) {
+                return;
+            }
+            
+            try {
+                await fetch('/api/logout', { 
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                
+                isAuthenticated = false;
+                currentUser = null;
+                updateNavForGuest();
+                
+                // Clear results
+                document.getElementById('results-area').classList.add('hidden');
+                document.getElementById('error-area').classList.add('hidden');
+                
+            } catch (err) {
+                console.error('Logout error:', err);
+                alert('Logout failed. Please try again.');
+            }
+        }
+
+        // ==================== SEARCH HANDLER (THE HOOK) ====================
+        async function handleSearchSubmit(event) {
+            event.preventDefault();
+            
+            // THE HOOK: Check if user is logged in
+            if (!isAuthenticated || !currentUser) {
+                // INTERCEPT: Open register modal instead of searching
                 openAuthModal('register');
                 return;
             }
             
-            const type = document.getElementById('biz-type').value;
-            const location = document.getElementById('location').value;
-            const purpose = document.getElementById('purpose').value;
+            // User is logged in: Proceed with search
+            await performSearch();
+        }
 
+        async function performSearch() {
+            const type = document.getElementById('biz-type').value;
+            const location = document.getElementById('location').value.trim();
+            const purpose = document.getElementById('purpose').value.trim();
+            
+            if (!location) {
+                alert('Please enter your location');
+                return;
+            }
+            
             // Reset UI
             document.getElementById('results-area').classList.add('hidden');
             document.getElementById('error-area').classList.add('hidden');
             document.getElementById('loader-area').classList.remove('hidden');
-
+            
             try {
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type, location, purpose })
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ 
+                        type, 
+                        location, 
+                        purpose: purpose || 'General funding'
+                    })
                 });
-
+                
                 const data = await response.json();
-
+                
                 if (!response.ok) {
                     throw new Error(data.error || 'Search failed');
                 }
-
-                renderResults(data);
-
+                
+                if (Array.isArray(data) && data.length > 0) {
+                    renderResults(data);
+                } else {
+                    throw new Error('No results found. Try adjusting your search criteria.');
+                }
+                
             } catch (err) {
-                console.error(err);
+                console.error('Search error:', err);
                 document.getElementById('error-msg').textContent = err.message;
                 document.getElementById('error-area').classList.remove('hidden');
             } finally {
@@ -395,84 +618,215 @@
             }
         }
 
-        // --- RENDER RESULTS ---
+        // ==================== RENDER RESULTS ====================
         function renderResults(results) {
             const container = document.getElementById('results-container');
+            document.getElementById('result-count').textContent = `${results.length} opportunities found`;
+            
             let html = '';
-
-            results.forEach(item => {
+            
+            results.forEach((item, index) => {
                 let borderClass = 'border-blue-500';
                 let bgClass = 'bg-blue-100 text-blue-800';
+                let icon = 'fa-dollar-sign';
                 
-                if (item.type && item.type.toLowerCase().includes('grant')) {
+                const itemType = (item.type || '').toLowerCase();
+                
+                if (itemType.includes('grant')) {
                     borderClass = 'border-green-500';
                     bgClass = 'bg-green-100 text-green-800';
-                } else if (item.type && item.type.toLowerCase().includes('loan')) {
+                    icon = 'fa-gift';
+                } else if (itemType.includes('loan')) {
                     borderClass = 'border-purple-500';
                     bgClass = 'bg-purple-100 text-purple-800';
+                    icon = 'fa-hand-holding-usd';
+                } else if (itemType.includes('investor')) {
+                    borderClass = 'border-yellow-500';
+                    bgClass = 'bg-yellow-100 text-yellow-800';
+                    icon = 'fa-user-tie';
                 }
-
+                
                 html += `
-                <div class="bg-white shadow rounded-lg p-6 border-l-4 ${borderClass} hover:shadow-md transition">
-                    <div class="flex justify-between items-start">
+                <div class="bg-white shadow-md rounded-xl p-6 border-l-4 ${borderClass} hover:shadow-lg transition-all duration-200 fade-in">
+                    <div class="flex justify-between items-start mb-4">
                         <div class="flex-1">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgClass}">${item.type || 'Opportunity'}</span>
-                            <h4 class="text-xl font-bold text-gray-900 mt-2">${item.name}</h4>
-                            <p class="text-sm text-gray-600 mt-2">${item.match_reason || ''}</p>
+                            <div class="flex items-center space-x-2 mb-3">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${bgClass}">
+                                    <i class="fas ${icon} mr-1"></i> ${item.type || 'Opportunity'}
+                                </span>
+                            </div>
+                            <h4 class="text-xl font-bold text-gray-900 mb-2">${item.name || 'Funding Opportunity'}</h4>
+                            <p class="text-sm text-gray-600 leading-relaxed">${item.match_reason || 'Matches your criteria'}</p>
                         </div>
                         <div class="text-right ml-4">
                             <div class="font-bold text-lg text-gray-900">${item.amount || 'Varies'}</div>
-                            <div class="text-xs text-gray-500 mt-1">Due: ${item.deadline || 'Rolling'}</div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                <i class="far fa-calendar-alt mr-1"></i>${item.deadline || 'Rolling'}
+                            </div>
                         </div>
                     </div>
-                    <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
-                        <button onclick="saveItem(${JSON.stringify(item).replace(/"/g, '&quot;')})" class="text-gray-600 hover:text-blue-600 font-medium text-sm">
-                            <i class="fas fa-bookmark mr-1"></i> Save
+                    <div class="pt-4 border-t border-gray-100 flex justify-between items-center">
+                        <button 
+                            onclick='saveOpportunity(${JSON.stringify(item).replace(/'/g, "&#39;")})' 
+                            class="text-gray-600 hover:text-blue-600 font-medium text-sm transition flex items-center"
+                        >
+                            <i class="far fa-bookmark mr-2"></i> Save for Later
                         </button>
-                        <a href="${item.link || '#'}" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center">
+                        <a 
+                            href="${item.link || '#'}" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2 rounded-lg transition flex items-center"
+                        >
                             Apply Now <i class="fas fa-external-link-alt ml-2"></i>
                         </a>
                     </div>
                 </div>`;
             });
-
+            
             container.innerHTML = html;
             document.getElementById('results-area').classList.remove('hidden');
+            
+            // Scroll to results
+            document.getElementById('results-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
-        // --- SAVE ITEM ---
-        async function saveItem(item) {
+        // ==================== SAVE OPPORTUNITY ====================
+        async function saveOpportunity(item) {
+            if (!isAuthenticated) {
+                alert('Please log in to save opportunities');
+                openAuthModal('login');
+                return;
+            }
+            
             try {
                 const response = await fetch('/api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify(item)
                 });
                 
                 const data = await response.json();
                 
-                if (response.ok) {
-                    alert('Opportunity saved successfully!');
+                if (response.ok && data.success) {
+                    alert('✓ Opportunity saved successfully!');
                 } else {
                     alert('Failed to save: ' + (data.error || 'Unknown error'));
                 }
             } catch (err) {
+                console.error('Save error:', err);
                 alert('Network error. Please try again.');
             }
         }
 
-        // --- INITIALIZE ON LOAD ---
-        window.addEventListener('DOMContentLoaded', () => {
-            checkAuthStatus();
+        // ==================== LOAD SAVED ITEMS ====================
+        async function loadSavedItems(event) {
+            event.preventDefault();
             
-            // Close modal when clicking outside
-            window.onclick = function(event) {
-                const modal = document.getElementById('auth-modal');
-                if (event.target === modal) {
-                    closeAuthModal();
-                }
+            if (!isAuthenticated) {
+                alert('Please log in to view saved items');
+                openAuthModal('login');
+                return;
             }
-        });
+            
+            try {
+                const response = await fetch('/api/saved', {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.items) {
+                    if (data.items.length === 0) {
+                        alert('You have no saved items yet. Start searching to find opportunities!');
+                    } else {
+                        renderSavedItems(data.items);
+                    }
+                } else {
+                    alert('Failed to load saved items: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Load saved items error:', err);
+                alert('Network error. Please try again.');
+            }
+        }
+
+        function renderSavedItems(items) {
+            // Clear search form and hide other sections
+            document.getElementById('error-area').classList.add('hidden');
+            document.getElementById('loader-area').classList.add('hidden');
+            
+            const container = document.getElementById('results-container');
+            document.getElementById('result-count').textContent = `${items.length} saved opportunities`;
+            
+            let html = '';
+            
+            items.forEach(item => {
+                let borderClass = 'border-blue-500';
+                let bgClass = 'bg-blue-100 text-blue-800';
+                let icon = 'fa-dollar-sign';
+                
+                const itemType = (item.type || '').toLowerCase();
+                
+                if (itemType.includes('grant')) {
+                    borderClass = 'border-green-500';
+                    bgClass = 'bg-green-100 text-green-800';
+                    icon = 'fa-gift';
+                } else if (itemType.includes('loan')) {
+                    borderClass = 'border-purple-500';
+                    bgClass = 'bg-purple-100 text-purple-800';
+                    icon = 'fa-hand-holding-usd';
+                } else if (itemType.includes('investor')) {
+                    borderClass = 'border-yellow-500';
+                    bgClass = 'bg-yellow-100 text-yellow-800';
+                    icon = 'fa-user-tie';
+                }
+                
+                const savedDate = new Date(item.created_at).toLocaleDateString();
+                
+                html += `
+                <div class="bg-white shadow-md rounded-xl p-6 border-l-4 ${borderClass} hover:shadow-lg transition-all duration-200">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-3">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${bgClass}">
+                                    <i class="fas ${icon} mr-1"></i> ${item.type || 'Opportunity'}
+                                </span>
+                                <span class="text-xs text-gray-500">
+                                    <i class="far fa-clock mr-1"></i>Saved on ${savedDate}
+                                </span>
+                            </div>
+                            <h4 class="text-xl font-bold text-gray-900 mb-2">${item.name || 'Funding Opportunity'}</h4>
+                            <p class="text-sm text-gray-600 leading-relaxed">${item.match_reason || ''}</p>
+                        </div>
+                        <div class="text-right ml-4">
+                            <div class="font-bold text-lg text-gray-900">${item.amount || 'Varies'}</div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                <i class="far fa-calendar-alt mr-1"></i>${item.deadline || 'Rolling'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-gray-100 flex justify-end">
+                        <a 
+                            href="${item.link || '#'}" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2 rounded-lg transition flex items-center"
+                        >
+                            Apply Now <i class="fas fa-external-link-alt ml-2"></i>
+                        </a>
+                    </div>
+                </div>`;
+            });
+            
+            container.innerHTML = html;
+            document.getElementById('results-area').classList.remove('hidden');
+            
+            // Scroll to results
+            document.getElementById('results-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     </script>
 </body>
 </html>
