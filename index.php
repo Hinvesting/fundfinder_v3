@@ -463,6 +463,21 @@ if ($uri === '/api/checkout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     try {
+        // Force HTTPS protocol for Codespaces/production
+        $protocol = 'https';
+        
+        // Get the base URL
+        $baseUrl = $_ENV['APP_URL'] ?? '';
+        if (empty($baseUrl)) {
+            // Auto-detect from HTTP_HOST
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
+            $baseUrl = $protocol . '://' . $host;
+        }
+        
+        // Construct return URLs
+        $successUrl = $baseUrl . '/payment-success.html?session_id={CHECKOUT_SESSION_ID}';
+        $cancelUrl = $baseUrl . '/index.html';
+        
         // Create Stripe Checkout Session
         $session = \Stripe\Checkout\Session::create([
             'payment_method_types' => ['card'],
@@ -478,15 +493,27 @@ if ($uri === '/api/checkout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 'quantity' => 1,
             ]],
             'mode' => 'payment',
-            'success_url' => ($_ENV['APP_URL'] ?? 'http://localhost:8000') . '/payment-success.html?session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => ($_ENV['APP_URL'] ?? 'http://localhost:8000') . '/pricing.html',
+            'success_url' => $successUrl,
+            'cancel_url' => $cancelUrl,
             'client_reference_id' => (string)$_SESSION['user_id'], // Link payment to user
         ]);
         
         echo json_encode(['sessionId' => $session->id]);
     } catch (\Stripe\Exception\ApiErrorException $e) {
+        // Log detailed error for debugging
+        error_log('Stripe Checkout Error: ' . $e->getMessage());
+        error_log('Stripe Error Type: ' . get_class($e));
+        if (method_exists($e, 'getJsonBody')) {
+            error_log('Stripe Error Body: ' . json_encode($e->getJsonBody()));
+        }
+        
         http_response_code(500);
         echo json_encode(['error' => 'Failed to create checkout session: ' . $e->getMessage()]);
+    } catch (Exception $e) {
+        // Catch any other exceptions
+        error_log('Checkout Exception: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Unexpected error: ' . $e->getMessage()]);
     }
     exit;
 }
