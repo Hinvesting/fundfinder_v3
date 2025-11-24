@@ -1,4 +1,7 @@
 <?php
+// Set timezone to EST for consistent daily limit resets
+date_default_timezone_set('America/New_York');
+
 require 'vendor/autoload.php';
 
 use Dotenv\Dotenv;
@@ -532,6 +535,9 @@ if ($uri === '/api/payment-success' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
+    // Debug logging
+    error_log("Payment Success Triggered for Session: " . $input['session_id']);
+    
     $stripeSecretKey = $_ENV['STRIPE_SECRET_KEY'] ?? '';
     if (empty($stripeSecretKey)) {
         http_response_code(500);
@@ -542,6 +548,11 @@ if ($uri === '/api/payment-success' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         // Retrieve the session from Stripe
         $session = \Stripe\Checkout\Session::retrieve($input['session_id']);
+        
+        // Debug logging
+        error_log("Stripe Session Retrieved - Payment Status: " . $session->payment_status);
+        error_log("Customer ID: " . ($session->customer ?? 'null'));
+        error_log("Client Reference ID: " . ($session->client_reference_id ?? 'null'));
         
         // Verify payment was successful
         if ($session->payment_status !== 'paid') {
@@ -570,10 +581,15 @@ if ($uri === '/api/payment-success' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         
-        $stmt = $db->prepare("UPDATE users SET subscription_status = 'active', stripe_customer_id = :customer_id WHERE id = :user_id");
-        $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
-        $stmt->bindValue(':customer_id', $stripeCustomerId, SQLITE3_TEXT);
-        $stmt->execute();
+        // SQL UPDATE with both subscription_status and stripe_customer_id
+        $stmt = $db->prepare("UPDATE users SET subscription_status = 'active', stripe_customer_id = :cid WHERE id = :uid");
+        $stmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+        $stmt->bindValue(':cid', $stripeCustomerId, SQLITE3_TEXT);
+        $result = $stmt->execute();
+        
+        // Debug logging
+        error_log("Database UPDATE executed for user ID: " . $userId);
+        error_log("Rows affected: " . ($db->changes() ?? 0));
         
         $db->close();
         echo json_encode([

@@ -382,6 +382,11 @@
 
         // ==================== NAVIGATION UI UPDATES ====================
         function updateNavForLoggedIn() {
+            // Debug logging for subscription status
+            console.log('🔍 DEBUG: userSubscriptionStatus =', userSubscriptionStatus);
+            console.log('🔍 DEBUG: typeof userSubscriptionStatus =', typeof userSubscriptionStatus);
+            console.log('🔍 DEBUG: Strict equality check (=== "active"):', userSubscriptionStatus === 'active');
+            
             // Hide guest buttons
             document.getElementById('signin-btn').classList.add('hidden');
             document.getElementById('join-btn').classList.add('hidden');
@@ -394,12 +399,15 @@
             const upgradeBtn = document.getElementById('upgrade-btn');
             const portalBtn = document.getElementById('portal-btn');
             
+            // Strict equality check for 'active' status
             if (userSubscriptionStatus === 'active') {
                 // Pro user - show portal button
+                console.log('✅ User is Pro - showing portal button');
                 upgradeBtn.classList.add('hidden');
                 portalBtn.classList.remove('hidden');
             } else {
                 // Free user - show upgrade button
+                console.log('🆓 User is Free - showing upgrade button');
                 upgradeBtn.classList.remove('hidden');
                 portalBtn.classList.add('hidden');
             }
