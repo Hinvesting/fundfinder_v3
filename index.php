@@ -35,8 +35,16 @@ function initDatabase() {
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         subscription_status TEXT DEFAULT 'free',
+        stripe_customer_id TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
+    
+    // Migration: Add stripe_customer_id column if it doesn't exist
+    try {
+        $db->exec("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT");
+    } catch (Exception $e) {
+        // Column already exists, ignore error
+    }
     
     // Create saved_items table
     $db->exec("CREATE TABLE IF NOT EXISTS saved_items (
@@ -482,14 +490,7 @@ if ($uri === '/api/checkout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $session = \Stripe\Checkout\Session::create([
             'payment_method_types' => ['card'],
             'line_items' => [[
-                'price_data' => [
-                    'currency' => 'usd',
-                    'product_data' => [
-                        'name' => 'FundFinder Pro',
-                        'description' => 'Unlimited funding searches and saved items',
-                    ],
-                    'unit_amount' => 4900, // $49.00
-                ],
+                'price' => 'price_1SWyjRFgkLxp2jFV8xIjWWJL', // FundFinder Pro Price ID
                 'quantity' => 1,
             ]],
             'mode' => 'payment',
@@ -558,7 +559,10 @@ if ($uri === '/api/payment-success' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         
-        // Update user's subscription status in database
+        // Get the Stripe customer ID
+        $stripeCustomerId = $session->customer ?? null;
+        
+        // Update user's subscription status and customer ID in database
         $db = getDB();
         if (!$db) {
             http_response_code(500);
@@ -566,8 +570,9 @@ if ($uri === '/api/payment-success' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         
-        $stmt = $db->prepare("UPDATE users SET subscription_status = 'active' WHERE id = :user_id");
+        $stmt = $db->prepare("UPDATE users SET subscription_status = 'active', stripe_customer_id = :customer_id WHERE id = :user_id");
         $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
+        $stmt->bindValue(':customer_id', $stripeCustomerId, SQLITE3_TEXT);
         $stmt->execute();
         
         $db->close();
@@ -579,6 +584,69 @@ if ($uri === '/api/payment-success' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (\Stripe\Exception\ApiErrorException $e) {
         http_response_code(500);
         echo json_encode(['error' => 'Failed to verify payment: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+// Create Stripe Customer Portal Session
+if ($uri === '/api/portal' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    requireAuth(); // User must be logged in
+    
+    $stripeSecretKey = $_ENV['STRIPE_SECRET_KEY'] ?? '';
+    if (empty($stripeSecretKey)) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Stripe not configured']);
+        exit;
+    }
+    
+    // Get user's Stripe customer ID from database
+    $db = getDB();
+    if (!$db) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Database connection failed']);
+        exit;
+    }
+    
+    $stmt = $db->prepare("SELECT stripe_customer_id FROM users WHERE id = :user_id");
+    $stmt->bindValue(':user_id', $_SESSION['user_id'], SQLITE3_INTEGER);
+    $result = $stmt->execute();
+    $user = $result->fetchArray(SQLITE3_ASSOC);
+    $db->close();
+    
+    if (!$user || empty($user['stripe_customer_id'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'No active subscription found']);
+        exit;
+    }
+    
+    try {
+        // Force HTTPS protocol for Codespaces/production
+        $protocol = 'https';
+        
+        // Get the base URL
+        $baseUrl = $_ENV['APP_URL'] ?? '';
+        if (empty($baseUrl)) {
+            // Auto-detect from HTTP_HOST
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
+            $baseUrl = $protocol . '://' . $host;
+        }
+        
+        // Create Stripe Billing Portal Session
+        $portalSession = \Stripe\BillingPortal\Session::create([
+            'customer' => $user['stripe_customer_id'],
+            'return_url' => $baseUrl . '/index.html',
+        ]);
+        
+        echo json_encode(['url' => $portalSession->url]);
+    } catch (\Stripe\Exception\ApiErrorException $e) {
+        error_log('Stripe Portal Error: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to create portal session: ' . $e->getMessage()]);
+    } catch (Exception $e) {
+        error_log('Portal Exception: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Unexpected error: ' . $e->getMessage()]);
     }
     exit;
 }

@@ -71,6 +71,9 @@
                     <button onclick="startCheckout()" id="upgrade-btn" class="hidden bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold px-4 py-2 rounded-md text-sm shadow-sm transition">
                         <i class="fas fa-crown mr-1"></i> Upgrade to Pro
                     </button>
+                    <button onclick="openPortal()" id="portal-btn" class="hidden bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-md text-sm shadow-sm transition">
+                        <i class="fas fa-cog mr-1"></i> Manage Subscription
+                    </button>
                     <a href="#saved" onclick="loadSavedItems(event)" id="saved-link" class="hidden text-gray-600 hover:text-blue-600 font-medium px-3 py-2 rounded-md text-sm transition">
                         <i class="fas fa-bookmark mr-1"></i> Saved
                     </a>
@@ -387,12 +390,18 @@
             document.getElementById('saved-link').classList.remove('hidden');
             document.getElementById('user-info').classList.remove('hidden');
             
-            // Show/hide upgrade button based on subscription status
+            // Show/hide upgrade or portal button based on subscription status
             const upgradeBtn = document.getElementById('upgrade-btn');
-            if (userSubscriptionStatus === 'free') {
-                upgradeBtn.classList.remove('hidden');
-            } else {
+            const portalBtn = document.getElementById('portal-btn');
+            
+            if (userSubscriptionStatus === 'active') {
+                // Pro user - show portal button
                 upgradeBtn.classList.add('hidden');
+                portalBtn.classList.remove('hidden');
+            } else {
+                // Free user - show upgrade button
+                upgradeBtn.classList.remove('hidden');
+                portalBtn.classList.add('hidden');
             }
             
             // Update user info
@@ -409,6 +418,7 @@
             
             // Hide logged-in elements
             document.getElementById('upgrade-btn').classList.add('hidden');
+            document.getElementById('portal-btn').classList.add('hidden');
             document.getElementById('saved-link').classList.add('hidden');
             document.getElementById('user-info').classList.add('hidden');
         }
@@ -874,6 +884,50 @@
         }
 
         // ==================== STRIPE CHECKOUT ====================
+        async function openPortal() {
+            if (!isAuthenticated || !currentUser) {
+                alert('Please log in to manage your subscription');
+                openAuthModal('login');
+                return;
+            }
+            
+            try {
+                // Show loading state
+                const portalBtn = document.getElementById('portal-btn');
+                const originalText = portalBtn ? portalBtn.innerHTML : '';
+                if (portalBtn) {
+                    portalBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Loading...';
+                    portalBtn.disabled = true;
+                }
+                
+                // Get portal session
+                const response = await fetch('/api/portal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin'
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to open portal');
+                }
+                
+                // Redirect to Stripe portal
+                window.location.href = data.url;
+            } catch (error) {
+                console.error('Portal error:', error);
+                alert('Failed to open customer portal: ' + error.message);
+                
+                // Restore button
+                const portalBtn = document.getElementById('portal-btn');
+                if (portalBtn) {
+                    portalBtn.innerHTML = '<i class="fas fa-cog mr-1"></i> Manage Subscription';
+                    portalBtn.disabled = false;
+                }
+            }
+        }
+        
         async function startCheckout() {
             if (!isAuthenticated || !currentUser) {
                 alert('Please log in to upgrade your account');
