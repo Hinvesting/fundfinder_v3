@@ -496,7 +496,7 @@ if ($uri === '/api/checkout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 'price' => 'price_1SWyjRFgkLxp2jFV8xIjWWJL', // FundFinder Pro Price ID
                 'quantity' => 1,
             ]],
-            'mode' => 'payment',
+            'mode' => 'subscription',
             'success_url' => $successUrl,
             'cancel_url' => $cancelUrl,
             'client_reference_id' => (string)$_SESSION['user_id'], // Link payment to user
