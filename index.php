@@ -474,20 +474,13 @@ if ($uri === '/api/checkout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     try {
-        // Force HTTPS protocol for Codespaces/production
-        $protocol = 'https';
-        
-        // Get the base URL
-        $baseUrl = $_ENV['APP_URL'] ?? '';
-        if (empty($baseUrl)) {
-            // Auto-detect from HTTP_HOST
-            $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
-            $baseUrl = $protocol . '://' . $host;
-        }
+        // Dynamic domain detection
+        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+        $domain = $protocol . '://' . $_SERVER['HTTP_HOST'];
         
         // Construct return URLs
-        $successUrl = $baseUrl . '/payment-success.html?session_id={CHECKOUT_SESSION_ID}';
-        $cancelUrl = $baseUrl . '/index.html';
+        $successUrl = $domain . '/payment-success.html?session_id={CHECKOUT_SESSION_ID}';
+        $cancelUrl = $domain . '/index.html';
         
         // Create Stripe Checkout Session
         $session = \Stripe\Checkout\Session::create([
@@ -637,21 +630,14 @@ if ($uri === '/api/portal' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     try {
-        // Force HTTPS protocol for Codespaces/production
-        $protocol = 'https';
-        
-        // Get the base URL
-        $baseUrl = $_ENV['APP_URL'] ?? '';
-        if (empty($baseUrl)) {
-            // Auto-detect from HTTP_HOST
-            $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
-            $baseUrl = $protocol . '://' . $host;
-        }
+        // Dynamic domain detection
+        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+        $domain = $protocol . '://' . $_SERVER['HTTP_HOST'];
         
         // Create Stripe Billing Portal Session
         $portalSession = \Stripe\BillingPortal\Session::create([
             'customer' => $user['stripe_customer_id'],
-            'return_url' => $baseUrl . '/index.html',
+            'return_url' => $domain . '/index.html',
         ]);
         
         echo json_encode(['url' => $portalSession->url]);
