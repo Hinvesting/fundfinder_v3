@@ -479,7 +479,7 @@ if ($uri === '/api/checkout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $domain = $protocol . '://' . $_SERVER['HTTP_HOST'];
         
         // Construct return URLs
-        $successUrl = $domain . '/payment-success.html?session_id={CHECKOUT_SESSION_ID}';
+        $successUrl = $domain . '/api/payment-success?session_id={CHECKOUT_SESSION_ID}';
         $cancelUrl = $domain . '/index.html';
         
         // Create Stripe Checkout Session
