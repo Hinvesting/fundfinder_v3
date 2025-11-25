@@ -6,6 +6,16 @@ require 'vendor/autoload.php';
 
 use Dotenv\Dotenv;
 
+// Configure session cookie parameters for localhost and production
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'domain' => '',
+    'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+    'httponly' => true,
+    'samesite' => 'Lax'
+]);
+
 session_start();
 
 // 1. LOAD CONFIG
@@ -43,10 +53,22 @@ function initDatabase() {
     )");
     
     // Migration: Add stripe_customer_id column if it doesn't exist
-    try {
-        $db->exec("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT");
-    } catch (Exception $e) {
-        // Column already exists, ignore error
+    // Check if column exists first to avoid duplicate warnings
+    $result = $db->querySingle("PRAGMA table_info(users)", true);
+    $columns = [];
+    $stmt = $db->prepare("PRAGMA table_info(users)");
+    $res = $stmt->execute();
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $columns[] = $row['name'];
+    }
+    
+    if (!in_array('stripe_customer_id', $columns)) {
+        try {
+            $db->exec("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT");
+        } catch (Exception $e) {
+            // Silently ignore if column somehow already exists
+            error_log('Migration notice: ' . $e->getMessage());
+        }
     }
     
     // Create saved_items table
@@ -300,7 +322,11 @@ if ($uri === '/api/register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     
     $input = json_decode(file_get_contents('php://input'), true);
     
+    // Debug logging
+    error_log('Registration attempt: ' . json_encode(['name' => $input['name'] ?? 'missing', 'email' => $input['email'] ?? 'missing']));
+    
     if (!isset($input['name']) || !isset($input['email']) || !isset($input['password'])) {
+        error_log('Registration failed: Missing required fields');
         http_response_code(400);
         echo json_encode(['error' => 'Missing required fields: name, email, password']);
         exit;
@@ -308,6 +334,7 @@ if ($uri === '/api/register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     
     $db = getDB();
     if (!$db) {
+        error_log('Registration failed: Database connection failed');
         http_response_code(500);
         echo json_encode(['error' => 'Database connection failed']);
         exit;
@@ -318,6 +345,7 @@ if ($uri === '/api/register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->bindValue(':email', $input['email'], SQLITE3_TEXT);
     $result = $stmt->execute();
     if ($result->fetchArray(SQLITE3_ASSOC)) {
+        error_log('Registration failed: Email already registered - ' . $input['email']);
         $db->close();
         http_response_code(409);
         echo json_encode(['error' => 'Email already registered']);
@@ -331,28 +359,46 @@ if ($uri === '/api/register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->bindValue(':email', $input['email'], SQLITE3_TEXT);
     $stmt->bindValue(':password', $hashedPassword, SQLITE3_TEXT);
     
-    if ($stmt->execute()) {
-        $userId = $db->lastInsertRowID();
-        
-        // Start session
-        $_SESSION['user_id'] = $userId;
-        $_SESSION['user_name'] = $input['name'];
-        $_SESSION['user_email'] = $input['email'];
-        
-        $db->close();
-        echo json_encode([
-            'success' => true,
-            'user' => [
-                'id' => $userId,
-                'name' => $input['name'],
-                'email' => $input['email']
-            ]
-        ]);
-    } else {
+    $executeResult = $stmt->execute();
+    
+    if ($executeResult === false) {
+        error_log('Registration failed: Execute returned false for ' . $input['email']);
         $db->close();
         http_response_code(500);
-        echo json_encode(['error' => 'Failed to create user']);
+        echo json_encode(['error' => 'Failed to create user - database error']);
+        exit;
     }
+    
+    $userId = $db->lastInsertRowID();
+    
+    if ($userId <= 0) {
+        error_log('Registration failed: Invalid user ID after insert - ' . $input['email']);
+        $db->close();
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to create user - invalid ID']);
+        exit;
+    }
+    
+    // Log successful registration
+    error_log('Registration successful: User ID ' . $userId . ' - ' . $input['email']);
+    
+    // Start session (already started at top, but set values)
+    $_SESSION['user_id'] = $userId;
+    $_SESSION['user_name'] = $input['name'];
+    $_SESSION['user_email'] = $input['email'];
+    
+    // Debug session
+    error_log('Session created: ' . json_encode($_SESSION));
+    
+    $db->close();
+    echo json_encode([
+        'success' => true,
+        'user' => [
+            'id' => $userId,
+            'name' => $input['name'],
+            'email' => $input['email']
+        ]
+    ]);
     exit;
 }
 
